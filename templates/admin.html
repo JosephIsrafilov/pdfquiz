@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Админ-панель</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=Sora:wght@400;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      rel="stylesheet"
+      href="{{ url_for('static', filename='styles.css') }}"
+    />
+  </head>
+  <body>
+    <div class="app">
+      <header class="topbar">
+        <a class="brand" href="{{ url_for('index') }}">
+          <span class="brand-mark">Q</span>
+          <span>PDF / DOCX Quiz</span>
+        </a>
+        <div class="topbar-actions">
+          <span class="user-pill">{{ current_user.username }} <strong>admin</strong></span>
+          <a class="button" href="{{ url_for('index') }}">На сайт</a>
+          <form method="post" action="{{ url_for('logout') }}">
+            <button class="button" type="submit">Выйти</button>
+          </form>
+        </div>
+      </header>
+
+      <section class="panel">
+        <div class="section-head">
+          <h1>Админ-панель</h1>
+          <p>Здесь можно заранее загружать документы и управлять пользователями.</p>
+        </div>
+        {% if error %}
+        <div class="form-alert">{{ error }}</div>
+        {% endif %}
+        {% if success %}
+        <div class="form-success">{{ success }}</div>
+        {% endif %}
+      </section>
+
+      <section class="panel admin-grid">
+        <div class="admin-column">
+          <div class="section-head">
+            <h2>Загрузить документ</h2>
+            <p>PDF и DOCX будут разобраны, а JSON можно импортировать уже готовым.</p>
+          </div>
+          <form method="post" action="{{ url_for('admin_upload_document') }}" enctype="multipart/form-data" class="admin-form">
+            <label class="control-label" for="title">Название</label>
+            <input id="title" name="title" class="text-input" type="text" placeholder="Например, Международный менеджмент" />
+            <label class="control-label" for="file">Файл</label>
+            <input id="file" name="file" class="text-input text-input--file" type="file" accept=".pdf,.docx,.json" required />
+            <button class="button button--primary" type="submit">Загрузить в базу</button>
+          </form>
+          <div class="hint">
+            Для больших PDF лучше сначала подготовить JSON локально и загрузить уже его.
+          </div>
+        </div>
+
+        <div class="admin-column">
+          <div class="section-head">
+            <h2>Документы</h2>
+            <p>Удаление документа удалит и связанные результаты по нему.</p>
+          </div>
+          <div class="admin-list">
+            {% for document in documents %}
+            <article class="admin-item">
+              <div>
+                <div class="admin-item__title">{{ document.title }}</div>
+                <div class="admin-item__meta">
+                  {{ document.question_count }} вопросов
+                  {% if document.uploader_name %}
+                  • загрузил {{ document.uploader_name }}
+                  {% endif %}
+                </div>
+              </div>
+              <form method="post" action="{{ url_for('admin_delete_document', document_id=document.id) }}">
+                <button class="button button--danger" type="submit">Удалить</button>
+              </form>
+            </article>
+            {% else %}
+            <div class="empty-state">Пока нет загруженных документов.</div>
+            {% endfor %}
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="section-head">
+          <h2>Пользователи</h2>
+          <p>Можно менять роль и удалять аккаунты.</p>
+        </div>
+        <div class="admin-list">
+          {% for user in users %}
+          <article class="admin-item">
+            <div>
+              <div class="admin-item__title">
+                {{ user.username }}
+                {% if user.is_admin %}
+                <span class="badge">admin</span>
+                {% endif %}
+              </div>
+              <div class="admin-item__meta">Создан: {{ user.created_at }}</div>
+            </div>
+            <div class="admin-actions">
+              <form method="post" action="{{ url_for('admin_toggle_user', user_id=user.id) }}">
+                <button class="button" type="submit">
+                  {% if user.is_admin %}Снять админа{% else %}Сделать админом{% endif %}
+                </button>
+              </form>
+              <form method="post" action="{{ url_for('admin_delete_user', user_id=user.id) }}">
+                <button class="button button--danger" type="submit">Удалить</button>
+              </form>
+            </div>
+          </article>
+          {% else %}
+          <div class="empty-state">Пользователей пока нет.</div>
+          {% endfor %}
+        </div>
+      </section>
+    </div>
+  </body>
+</html>

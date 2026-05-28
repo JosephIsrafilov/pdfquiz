@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Профиль</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=Sora:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      rel="stylesheet"
+      href="{{ url_for('static', filename='styles.css') }}"
+    />
+  </head>
+  <body>
+    <div class="app">
+      <header class="topbar">
+        <a class="brand" href="{{ url_for('index') }}">
+          <span class="brand-mark">Q</span>
+          <span>PDF / DOCX Quiz</span>
+        </a>
+        <div class="topbar-actions">
+          <span class="user-pill">
+            {{ current_user.username }}
+            {% if current_user.is_admin %}
+            <strong>admin</strong>
+            {% endif %}
+          </span>
+          {% if current_user.is_admin %}
+          <a class="button" href="{{ url_for('admin_panel') }}">Админ-панель</a>
+          {% endif %}
+          <a class="button" href="{{ url_for('index') }}">На главную</a>
+          <form method="post" action="{{ url_for('logout') }}">
+            <button class="button" type="submit">Выйти</button>
+          </form>
+        </div>
+      </header>
+
+      <section class="panel">
+        <div class="section-head">
+          <h1>Профиль</h1>
+          <p>Здесь сохраняются прошлые тесты, результаты и номера ошибок.</p>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="section-head">
+          <h2>История попыток</h2>
+          <p>Последние сохраненные результаты этого аккаунта.</p>
+        </div>
+        <div class="history-grid history-grid--wide">
+          {% if results %}
+            {% for result in results %}
+            <article class="history-card">
+              <div class="history-card__title">{{ result.source_label }}</div>
+              <div class="history-card__meta">{{ result.created_at }}</div>
+              <div class="history-card__stats">
+                <span>{{ result.correct }}/{{ result.graded }} верно</span>
+                <span>{{ result.quiz_size }} в пробнике</span>
+                <span>{{ result.unanswered }} без ответа</span>
+              </div>
+              {% if result.attempt_available %}
+              <div class="history-card__actions">
+                <a class="button" href="{{ url_for('profile_result_detail', result_id=result.id) }}">Открыть попытку</a>
+              </div>
+              {% endif %}
+              {% if result.mistake_numbers %}
+              <div class="history-card__mistakes">
+                Ошибки по номерам в документе: {{ result.mistake_numbers|join(', ') }}
+              </div>
+              {% else %}
+              <div class="history-card__mistakes history-card__mistakes--ok">
+                Ошибок нет.
+              </div>
+              {% endif %}
+            </article>
+            {% endfor %}
+          {% else %}
+          <div class="empty-state">
+            У этого аккаунта пока нет сохраненных результатов.
+          </div>
+          {% endif %}
+        </div>
+      </section>
+    </div>
+  </body>
+</html>

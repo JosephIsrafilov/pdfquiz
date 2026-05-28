@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Регистрация</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=Sora:wght@400;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      rel="stylesheet"
+      href="{{ url_for('static', filename='styles.css') }}"
+    />
+  </head>
+  <body>
+    <div class="auth-layout">
+      <div class="auth-card">
+        <a class="brand brand--auth" href="{{ url_for('index') }}">
+          <span class="brand-mark">Q</span>
+          <span>PDF / DOCX Quiz</span>
+        </a>
+        <h1>Регистрация</h1>
+        <p class="subtitle">После регистрации история попыток и ошибки будут храниться в аккаунте.</p>
+        {% if error %}
+        <div class="form-alert">{{ error }}</div>
+        {% endif %}
+        <form method="post" class="auth-form">
+          <input type="hidden" name="next" value="{{ next_url }}" />
+          <label class="control-label" for="username">Логин</label>
+          <input id="username" name="username" class="text-input" type="text" required />
+          <label class="control-label" for="password">Пароль</label>
+          <input id="password" name="password" class="text-input" type="password" required />
+          <label class="control-label" for="password_repeat">Повтори пароль</label>
+          <input id="password_repeat" name="password_repeat" class="text-input" type="password" required />
+          <button class="button button--primary" type="submit">Создать аккаунт</button>
+        </form>
+        <div class="auth-links">
+          Уже есть аккаунт?
+          <a href="{{ url_for('login', next=next_url) }}">Войти</a>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>
