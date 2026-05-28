@@ -276,32 +276,21 @@ def extract_text_from_pdf_bytes(file_bytes: bytes) -> str:
     header_counts: Dict[str, int] = {}
     footer_counts: Dict[str, int] = {}
     header_footer_lines = 3
-    
-    # We also keep track of bold lines to pass them through.
-    # Since parse_questions takes a raw string, we can inject a checkmark
-    # or an asterisk at the end of a line if it's bold!
-    
-    with pdfplumber.open(io.BytesIO(file_bytes)) as pdf:
-        for page_number, page in enumerate(pdf.pages, start=1):
-            lines = extract_pdf_line_groups(page, page_number)
-            
-            page_text_lines = []
-            for line in lines:
-                text = line["text"]
-                if line.get("is_bold"):
-                    # Inject a marker so the downstream regex parser knows it's correct
-                    text += " (верно)"
-                page_text_lines.append(text)
-                
-            pages_lines.append(page_text_lines)
 
-            for line in page_text_lines[:header_footer_lines]:
-                # strip the injected marker for header checking
-                clean_l = line.replace(" (верно)", "")
-                header_counts[clean_l] = header_counts.get(clean_l, 0) + 1
-            for line in page_text_lines[-header_footer_lines:]:
-                clean_l = line.replace(" (верно)", "")
-                footer_counts[clean_l] = footer_counts.get(clean_l, 0) + 1
+    with pdfplumber.open(io.BytesIO(file_bytes)) as pdf:
+        for page in pdf.pages:
+            page_text = page.extract_text(x_tolerance=2, y_tolerance=2) or ""
+            lines = [
+                line.replace("\u00a0", " ").rstrip()
+                for line in page_text.split("\n")
+                if line.strip()
+            ]
+            pages_lines.append(lines)
+
+            for line in lines[:header_footer_lines]:
+                header_counts[line] = header_counts.get(line, 0) + 1
+            for line in lines[-header_footer_lines:]:
+                footer_counts[line] = footer_counts.get(line, 0) + 1
 
     header_remove = {line for line, count in header_counts.items() if count >= 2}
     footer_remove = {line for line, count in footer_counts.items() if count >= 2}
@@ -310,10 +299,9 @@ def extract_text_from_pdf_bytes(file_bytes: bytes) -> str:
         cleaned: List[str] = []
         total = len(lines)
         for index, line in enumerate(lines):
-            clean_l = line.replace(" (верно)", "")
-            if index < header_footer_lines and clean_l in header_remove:
+            if index < header_footer_lines and line in header_remove:
                 continue
-            if index >= total - header_footer_lines and clean_l in footer_remove:
+            if index >= total - header_footer_lines and line in footer_remove:
                 continue
             cleaned.append(line)
         text_parts.extend(cleaned)

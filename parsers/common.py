@@ -353,10 +353,16 @@ def parse_question_block(block: Dict) -> Dict:
 
     def looks_like_stem_boundary(text: str) -> bool:
         stripped = text.rstrip()
+        lower_text = stripped.lower()
+        has_question_word = any(
+            lower_text.startswith(word) or f" {word} " in lower_text or lower_text.endswith(f" {word}")
+            for word in ["какие", "какой", "какая", "что", "где", "как", "почему", "зачем", "кто", "укажите", "выберите", "назовите", "найдите"]
+        )
         return (
             "?" in stripped
             or stripped.endswith(":")
             or stripped.endswith(("...", "…", "….", "…..", "."))
+            or has_question_word
         )
 
     def split_bare_options(
@@ -376,11 +382,23 @@ def parse_question_block(block: Dict) -> Dict:
             trailing_count = len(filtered) - idx - 1 + existing_option_count
             if trailing_count < 2:
                 continue
+                
+            trailing = filtered[idx + 1 :]
 
             score = 0
             if looks_like_stem_boundary(filtered[idx]):
                 score += 3
             if idx == 0 and len(filtered) - 1 >= 4:
+                score += 1
+                
+            starts_upper = sum(1 for t in trailing if t and t[0].isupper())
+            if starts_upper == len(trailing):
+                score += 2
+            elif starts_upper == 0:
+                score += 1
+                
+            avg_len = sum(len(t) for t in trailing) / len(trailing)
+            if avg_len < 60:
                 score += 1
 
             if score > best_score:

@@ -10,6 +10,3 @@ services:
         generateValue: true
       - key: PYTHON_VERSION
         value: 3.11.0
-      - key: DATABASE_URL
-        value: postgresql://postgres:XeCore1867!@db.gmwwdbeajdfcizsyymhi.supabase.co:5432/postgres
-

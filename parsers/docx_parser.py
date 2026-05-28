@@ -312,7 +312,7 @@ def extract_docx_paragraphs(file_bytes: bytes) -> List[Dict]:
 
 
 def parse_docx_questions(paragraphs: List[Dict]) -> List[Dict]:
-    from .common import clean_option_text  # localized import to prevent cycle if any
+    from .common import clean_option_text, strip_question_leading_noise, match_question_line
 
     questions: List[Dict] = []
     current: Optional[Dict] = None
@@ -355,87 +355,138 @@ def parse_docx_questions(paragraphs: List[Dict]) -> List[Dict]:
                 return candidate
         return None
 
-    for i, paragraph in enumerate(paragraphs):
+    def is_question_start(paragraph: Dict) -> bool:
+        nonlocal current, last_number
+        text = paragraph["text"]
+        if paragraph["is_bullet"]:
+            return False
+
+        match = match_question_line(text, 0, last_number)
+        if match:
+            return True
+
+        raw_text = text.lstrip()
+        cleaned = strip_question_leading_noise(text)
+        if raw_text.startswith("+"):
+            return True
+
+        if current and not current["options"]:
+            return False
+
+        if paragraph["is_numbered"] and cleaned and not cleaned.startswith("("):
+            return True
+
+        return False
+
+    def start_question(paragraph: Dict) -> None:
+        nonlocal current, last_number
+        text = paragraph["text"]
+        match = match_question_line(text, 0, last_number)
+        question_number = None
+        question_text = strip_question_leading_noise(text)
+
+        if match:
+            question_number, question_text = match
+        elif paragraph.get("list_number") is not None:
+            question_number = paragraph["list_number"]
+        elif paragraph["is_numbered"]:
+            question_number = (last_number + 1) if last_number is not None else None
+
+        question_text = strip_question_leading_noise(question_text)
+        current = {
+            "number": question_number,
+            "question_lines": [question_text] if question_text else [],
+            "options": [],
+        }
+        if question_number is not None:
+            last_number = question_number
+
+    def looks_like_first_plain_option(index: int) -> bool:
+        if current is None or current["options"]:
+            return False
+        if not current["question_lines"]:
+            return False
+        paragraph = paragraphs[index]
+        text = paragraph["text"].strip()
+        if paragraph["is_numbered"]:
+            return False
+        if text.startswith("(") and text.endswith(")"):
+            return False
+        next_item = next_non_empty(index)
+        if next_item and next_item["is_bullet"]:
+            return True
+        question_text = normalize_space(" ".join(current["question_lines"]))
+        lowered = question_text.lower()
+        return question_text.endswith(":") or "выделите" in lowered
+
+    def should_append_to_previous_option(previous_text: str, next_text: str) -> bool:
+        cleaned_next, _ = clean_option_text(next_text)
+        if not cleaned_next:
+            return False
+        if cleaned_next in {".", ",", ";", ":"}:
+            return True
+        previous_trimmed = previous_text.rstrip()
+        if previous_trimmed.endswith((",", "(", "«", "-", "—")):
+            return True
+        last_word = previous_trimmed.split()[-1].strip(".,;:!?()\"«»").lower()
+        if last_word in continuation_words:
+            return True
+        if (
+            cleaned_next[0].islower()
+            and len(previous_trimmed) >= 60
+            and not previous_trimmed.endswith((".", ";", ":", "!", "?"))
+        ):
+            return True
+        return False
+
+    for index, paragraph in enumerate(paragraphs):
         text = paragraph["text"]
         if not text:
             continue
 
-        if paragraph["is_numbered"] and paragraph["list_number"] is not None:
-            number = paragraph["list_number"]
-            if last_number is None or (
-                number > last_number and number - last_number <= 5
-            ) or (number == 1 and current and len(current["options"]) >= 2):
-                finalize_current()
-                current = {
-                    "number": number,
-                    "question_lines": [text.split(".", 1)[-1].strip()],
-                    "options": [],
-                }
-                last_number = number
+        if is_question_start(paragraph):
+            finalize_current()
+            start_question(paragraph)
+            continue
+
+        if current is None:
+            continue
+
+        bullet_like = paragraph["is_bullet"] or bool(re.match(r"^[A-ZА-Яa-zа-я\d]\)[\s\.]+", text))
+
+        if bullet_like or looks_like_first_plain_option(index) or current["options"]:
+            cleaned_text, marker_correct = clean_option_text(text, pre_marked_correct=paragraph.get("marked_correct", False))
+            if not cleaned_text:
                 continue
             
-        match = re.match(r"^\s*(\d{1,4})[\.\)]\s*(.*)$", text)
-        if match:
-            number = int(match.group(1))
-            if last_number is None or (
-                number > last_number and number - last_number <= 5
-            ) or (number == 1 and current and len(current["options"]) >= 2):
-                finalize_current()
-                current = {
-                    "number": number,
-                    "question_lines": [match.group(2).strip()],
-                    "options": [],
-                }
-                last_number = number
+            if re.match(r"^[A-ZА-Яa-zа-я\d]\)", cleaned_text):
+                cleaned_text = re.sub(r"^[A-ZА-Яa-zа-я\d]\)\s*", "", cleaned_text)
+                
+            previous_option = current["options"][-1] if current["options"] else None
+            
+            if previous_option and should_append_to_previous_option(
+                previous_option["text"], text
+            ) and not bullet_like:
+                previous_option["text"] = normalize_space(
+                    f"{previous_option['text']} {cleaned_text}"
+                )
+                if paragraph.get("marked_correct", False):
+                    previous_option["is_correct"] = True
                 continue
+                
+            current["options"].append(
+                {
+                    "text": cleaned_text,
+                    "is_correct": marker_correct,
+                }
+            )
+            continue
 
-        if current:
-            lower_text = text.lower()
-            if paragraph["is_bullet"]:
-                cleaned, is_correct = clean_option_text(text.lstrip(BULLET_CHARS).strip(), pre_marked_correct=paragraph.get("marked_correct", False))
-                current["options"].append(
-                    {"text": cleaned, "is_correct": is_correct}
-                )
-            elif (
-                len(current["question_lines"]) == 1
-                and not current["question_lines"][0]
-                and len(current["options"]) == 0
-                and not re.match(r"^[A-ZА-Яa-zа-я\d]\)", text)
-            ):
-                current["question_lines"].append(text)
-            elif re.match(r"^[A-ZА-Яa-zа-я\d]\)", text):
-                cleaned, is_correct = clean_option_text(re.sub(r"^[A-ZА-Яa-zа-я\d]\)\s*", "", text), pre_marked_correct=paragraph.get("marked_correct", False))
-                current["options"].append(
-                    {"text": cleaned, "is_correct": is_correct}
-                )
-            elif current["options"]:
-                if len(text) < 40 and text.endswith((".", ";", ":", "!", "?")):
-                    cleaned, is_correct = clean_option_text(text, pre_marked_correct=paragraph.get("marked_correct", False))
-                    current["options"].append(
-                        {"text": cleaned, "is_correct": is_correct}
-                    )
-                else:
-                    last_option = current["options"][-1]
-                    last_option["text"] += f" {text}"
-                    if paragraph.get("marked_correct", False):
-                        last_option["is_correct"] = True
-            else:
-                last_q_line = current["question_lines"][-1].strip() if current["question_lines"] else ""
-                next_p = next_non_empty(i)
-                if (
-                    not last_q_line.endswith((".", "?", ":", "!"))
-                    and (
-                        text[0].islower()
-                        or lower_text.split()[0] in continuation_words
-                        or (next_p and not next_p["is_bullet"] and not re.match(r"^[A-ZА-Яa-zа-я\d]\)", next_p["text"]))
-                    )
-                ):
-                    current["question_lines"].append(text)
-                else:
-                    cleaned, is_correct = clean_option_text(text, pre_marked_correct=paragraph.get("marked_correct", False))
-                    current["options"].append(
-                        {"text": cleaned, "is_correct": is_correct}
-                    )
-                    
+        if current["number"] is None and paragraph.get("list_number") is not None:
+            current["number"] = paragraph["list_number"]
+            last_number = paragraph["list_number"]
+
+        current["question_lines"].append(strip_question_leading_noise(text))
+
     finalize_current()
     return questions
