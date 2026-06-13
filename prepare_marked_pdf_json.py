@@ -6,7 +6,7 @@ from typing import Dict, List, Optional, Tuple
 
 import pdfplumber
 
-from web_app import (
+from parsers.common import (
     match_question_line,
     normalize_space,
     parse_question_block,
@@ -14,6 +14,11 @@ from web_app import (
 
 
 MARKER_LINES = {"•", "∙", "·", "●", "◦", "✓", "✔", "√"}
+CORRECT_CHARS = "✓✔√"
+BULLET_CHARS = "•∙·●◦"
+_CORRECT_RE = re.compile(r"^[" + re.escape(CORRECT_CHARS) + r"]\s*")
+_BULLET_RE = re.compile(r"^[" + re.escape(BULLET_CHARS) + r"]\s*")
+_ANY_MARKER_RE = re.compile(r"^[" + re.escape(CORRECT_CHARS + BULLET_CHARS) + r"]\s*")
 
 
 def normalize_for_match(text: str) -> str:
@@ -84,12 +89,28 @@ def split_numbered_blocks(lines: List[str]) -> List[Dict]:
     last_number: Optional[int] = None
 
     for line in lines:
-        match = match_question_line(line, 0, last_number)
-        if match:
+        # Pass None for last_number to bypass the +5 gap limit; enforce only forward-ordering here
+        match = match_question_line(line, 0, None)
+        if match and (last_number is None or match[0] > last_number):
             number, rest = match
+
+            # When the number sits on its own line (rest is empty), the question stem
+            # may have started on the previous line(s), which got appended to the
+            # previous block after its options. Move those trailing non-marker lines
+            # to the new block so the stem stays intact.
+            moved: List[str] = []
+            if current and not rest:
+                if any(_ANY_MARKER_RE.match(l) for l in current["lines"]):
+                    while current["lines"] and not _ANY_MARKER_RE.match(
+                        current["lines"][-1]
+                    ):
+                        moved.insert(0, current["lines"].pop())
+
             if current:
                 blocks.append(current)
-            current = {"number": number, "lines": [rest] if rest else []}
+            current = {"number": number, "lines": moved}
+            if rest:
+                current["lines"].append(rest)
             last_number = number
             continue
 
@@ -102,20 +123,104 @@ def split_numbered_blocks(lines: List[str]) -> List[Dict]:
     return blocks
 
 
+def parse_marked_block(block: Dict) -> Optional[Dict]:
+    """Parse a block whose options are each prefixed by a marker.
+
+    `√ ✓ ✔` marks the correct option; `• ∙ · ● ◦` marks distractors. Lines
+    before the first marker form the question stem.
+
+    pdfplumber sometimes places the marker glyph on its own line, splitting an
+    option's text across the line(s) before and after it. We buffer unmarked
+    lines as `pending` and resolve them when the next marker arrives:
+      - inline marker (text on the marker line): pending lines were a wrapped
+        continuation of the previous option;
+      - standalone marker (no text): the last pending line is part-A of THIS
+        option; any earlier pending lines continue the previous option.
+    Trailing pending lines continue the final option.
+    """
+    lines = [normalize_space(l) for l in block["lines"]]
+    lines = [l for l in lines if l and not is_noise_line(l)]
+
+    question_lines: List[str] = []
+    options: List[Dict] = []
+    pending: List[str] = []
+    seen_marker = False
+
+    def extend_last(parts: List[str]) -> None:
+        if options and parts:
+            options[-1]["text"] = normalize_space(
+                " ".join([options[-1]["text"], *parts]).strip()
+            )
+
+    for line in lines:
+        correct_m = _CORRECT_RE.match(line)
+        bullet_m = _BULLET_RE.match(line)
+        if correct_m or bullet_m:
+            marker = correct_m or bullet_m
+            own_text = normalize_space(line[marker.end():])
+            if own_text:
+                # inline marker: pending was a continuation of the previous option
+                extend_last(pending)
+                options.append({"text": own_text, "is_correct": bool(correct_m)})
+            else:
+                # standalone marker: last pending line is this option's part-A
+                part_a = ""
+                if pending:
+                    part_a = pending[-1]
+                    extend_last(pending[:-1])
+                elif not seen_marker and len(question_lines) > 1:
+                    # first option's part-A landed in the question buffer
+                    part_a = question_lines.pop()
+                options.append({"text": part_a, "is_correct": bool(correct_m)})
+            pending = []
+            seen_marker = True
+        elif not seen_marker:
+            question_lines.append(line)
+        else:
+            pending.append(line)
+
+    extend_last(pending)
+
+    options = [opt for opt in options if opt["text"]]
+    if len(options) < 2 or not question_lines:
+        return None
+
+    return {
+        "number": block["number"],
+        "text": normalize_space(" ".join(question_lines)),
+        "options": options,
+        "answer_hint": None,
+    }
+
+
 def strip_answer_markers(lines: List[str]) -> Tuple[List[str], List[str]]:
     stripped_lines: List[str] = []
     correct_hints: List[str] = []
 
     for index, line in enumerate(lines):
-        if line.strip() not in MARKER_LINES:
-            stripped_lines.append(line)
+        stripped = line.strip()
+
+        # Standalone marker line
+        if stripped in MARKER_LINES:
+            for next_line in lines[index + 1 :]:
+                cleaned = normalize_space(next_line)
+                # Strip inline marker from the next line too
+                cleaned = _INLINE_MARKER_RE.sub("", cleaned).strip()
+                if cleaned and cleaned not in MARKER_LINES and not is_noise_line(cleaned):
+                    correct_hints.append(cleaned)
+                    break
             continue
 
-        for next_line in lines[index + 1 :]:
-            cleaned = normalize_space(next_line)
-            if cleaned and cleaned not in MARKER_LINES and not is_noise_line(cleaned):
-                correct_hints.append(cleaned)
-                break
+        # Inline marker at start of line (e.g. "√ Some answer text")
+        inline_match = _INLINE_MARKER_RE.match(stripped)
+        if inline_match:
+            clean_text = normalize_space(stripped[inline_match.end():])
+            if clean_text and not is_noise_line(clean_text):
+                correct_hints.append(clean_text)
+                stripped_lines.append(clean_text)
+            continue
+
+        stripped_lines.append(line)
 
     return stripped_lines, correct_hints
 
@@ -184,27 +289,21 @@ def parse_block_by_last_options(
 def parse_marked_pdf(path: Path) -> List[Dict]:
     blocks = split_numbered_blocks(extract_pdf_lines(path))
     questions: List[Dict] = []
+    unmatched: List[int] = []
 
     for block in blocks:
-        stripped_lines, correct_hints = strip_answer_markers(block["lines"])
-        if not correct_hints:
+        parsed = parse_marked_block(block)
+        if parsed is None:
+            unmatched.append(block["number"])
             continue
-
-        parsed = parse_question_block(
-            {"number": block["number"], "lines": stripped_lines}
-        )
-        if not parsed.get("text") or len(parsed.get("options", [])) < 2:
-            fallback = parse_block_by_last_options(block, stripped_lines, correct_hints)
-            if fallback is not None:
-                questions.append(fallback)
-            continue
-
-        mark_correct_options(parsed, correct_hints)
-        if not any(option.get("is_correct") for option in parsed.get("options", [])):
-            fallback = parse_block_by_last_options(block, stripped_lines, correct_hints)
-            if fallback is not None:
-                parsed = fallback
+        if not any(opt["is_correct"] for opt in parsed["options"]):
+            unmatched.append(block["number"])
         questions.append(parsed)
+
+    if unmatched:
+        preview = ", ".join(str(n) for n in unmatched[:20])
+        more = "" if len(unmatched) <= 20 else f" (+{len(unmatched) - 20} more)"
+        print(f"Warning: no correct option matched for questions: {preview}{more}")
 
     return questions
 

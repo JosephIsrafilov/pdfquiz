@@ -2,7 +2,16 @@ import json
 import sys
 from pathlib import Path
 
-from web_app import parse_uploaded_questions
+from parsers.pdf_parser import parse_pdf_questions
+from parsers.docx_parser import parse_docx_questions, extract_docx_paragraphs
+
+
+def parse_uploaded_questions_local(filename: str, file_bytes: bytes):
+    lowered = filename.lower()
+    if lowered.endswith(".pdf"):
+        return parse_pdf_questions(file_bytes)
+    if lowered.endswith(".docx"):
+        return parse_docx_questions(extract_docx_paragraphs(file_bytes))
 
 
 def main() -> int:
@@ -22,7 +31,7 @@ def main() -> int:
     )
 
     file_bytes = input_path.read_bytes()
-    questions = parse_uploaded_questions(input_path.name, file_bytes)
+    questions = parse_uploaded_questions_local(input_path.name, file_bytes)
 
     if not questions:
         print("No questions were parsed.")
