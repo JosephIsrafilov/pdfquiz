@@ -637,7 +637,7 @@ def delete_user(user_id: int) -> None:
 
 init_db()
 
-from parsers.common import parse_questions
+from parsers.common import normalize_space, parse_questions
 from parsers.docx_parser import parse_docx_questions, extract_docx_paragraphs
 from parsers.pdf_parser import parse_pdf_questions
 
