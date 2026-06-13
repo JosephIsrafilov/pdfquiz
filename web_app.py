@@ -547,6 +547,25 @@ def normalize_imported_questions(questions: object) -> List[Dict]:
     return normalized
 
 
+def parse_uploaded_json(file_bytes: bytes) -> List[Dict]:
+    if not file_bytes:
+        raise ValueError("JSON файл пустой.")
+
+    try:
+        payload_text = file_bytes.decode("utf-8-sig")
+    except UnicodeDecodeError as error:
+        raise ValueError("JSON файл должен быть в кодировке UTF-8.") from error
+
+    try:
+        payload = json.loads(payload_text)
+    except json.JSONDecodeError as error:
+        raise ValueError(
+            f"Некорректный JSON: строка {error.lineno}, столбец {error.colno}."
+        ) from error
+
+    return normalize_imported_questions(payload)
+
+
 def parse_uploaded_questions(filename: str, file_bytes: bytes) -> List[Dict]:
     lowered = filename.lower()
     if lowered.endswith(".pdf"):
@@ -560,8 +579,7 @@ def parse_uploaded_questions(filename: str, file_bytes: bytes) -> List[Dict]:
     if lowered.endswith(".docx"):
         return parse_docx_questions(extract_docx_paragraphs(file_bytes))
     if lowered.endswith(".json"):
-        payload = json.loads(file_bytes.decode("utf-8"))
-        return normalize_imported_questions(payload)
+        return parse_uploaded_json(file_bytes)
     raise ValueError("Поддерживаются только PDF, DOCX и JSON.")
 
 
@@ -580,8 +598,7 @@ def parse_uploaded_file(filename: str, file_storage) -> List[Dict]:
     if lowered.endswith(".docx"):
         return parse_docx_questions(extract_docx_paragraphs(file_bytes))
     if lowered.endswith(".json"):
-        payload = json.loads(file_bytes.decode("utf-8"))
-        return normalize_imported_questions(payload)
+        return parse_uploaded_json(file_bytes)
     raise ValueError("Поддерживаются только PDF, DOCX и JSON.")
 
 
@@ -749,7 +766,14 @@ def admin_upload_document():
         questions = parse_uploaded_file(filename, file)
     except ValueError as error:
         return redirect(url_for("admin_panel", error=str(error)))
+    except BadZipFile:
+        return redirect(
+            url_for("admin_panel", error="DOCX файл поврежден или имеет неверный формат.")
+        )
+    except KeyError:
+        return redirect(url_for("admin_panel", error="Не удалось прочитать структуру DOCX."))
     except Exception:
+        app.logger.exception("Failed to upload document: %s", file.filename)
         return redirect(url_for("admin_panel", error="Не удалось обработать файл."))
 
     if not questions:
