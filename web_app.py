@@ -3,6 +3,7 @@ import json
 import os
 import re
 import sqlite3
+import tempfile
 import xml.etree.ElementTree as ET
 from functools import wraps
 from html import unescape
@@ -549,7 +550,33 @@ def normalize_imported_questions(questions: object) -> List[Dict]:
 def parse_uploaded_questions(filename: str, file_bytes: bytes) -> List[Dict]:
     lowered = filename.lower()
     if lowered.endswith(".pdf"):
-        return parse_pdf_questions(file_bytes)
+        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
+            tmp.write(file_bytes)
+            tmp_path = tmp.name
+        try:
+            return parse_pdf_questions(tmp_path)
+        finally:
+            os.unlink(tmp_path)
+    if lowered.endswith(".docx"):
+        return parse_docx_questions(extract_docx_paragraphs(file_bytes))
+    if lowered.endswith(".json"):
+        payload = json.loads(file_bytes.decode("utf-8"))
+        return normalize_imported_questions(payload)
+    raise ValueError("Поддерживаются только PDF, DOCX и JSON.")
+
+
+def parse_uploaded_file(filename: str, file_storage) -> List[Dict]:
+    """Stream file to disk for PDF to avoid double-buffering in RAM."""
+    lowered = filename.lower()
+    if lowered.endswith(".pdf"):
+        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
+            file_storage.save(tmp)
+            tmp_path = tmp.name
+        try:
+            return parse_pdf_questions(tmp_path)
+        finally:
+            os.unlink(tmp_path)
+    file_bytes = file_storage.read()
     if lowered.endswith(".docx"):
         return parse_docx_questions(extract_docx_paragraphs(file_bytes))
     if lowered.endswith(".json"):
@@ -719,8 +746,7 @@ def admin_upload_document():
         return redirect(url_for("admin_panel", error="Поддерживаются только PDF, DOCX и JSON."))
 
     try:
-        file_bytes = file.read()
-        questions = parse_uploaded_questions(filename, file_bytes)
+        questions = parse_uploaded_file(filename, file)
     except ValueError as error:
         return redirect(url_for("admin_panel", error=str(error)))
     except Exception:
@@ -791,8 +817,7 @@ def parse_document():
             return jsonify({"error": "Поддерживаются только PDF, DOCX и JSON"}), 400
 
         try:
-            file_bytes = file.read()
-            questions = parse_uploaded_questions(filename, file_bytes)
+            questions = parse_uploaded_file(filename, file)
             source_label = file.filename
         except ValueError as error:
             return jsonify({"error": str(error)}), 400

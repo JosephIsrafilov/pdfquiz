@@ -1,5 +1,6 @@
 import io
-from typing import Dict, List, Optional
+import os
+from typing import Dict, List, Optional, Union
 import pdfplumber
 
 from .common import (
@@ -134,11 +135,12 @@ def extract_pdf_radio_rows(page, page_number: int, lines: List[Dict]) -> List[Di
     return rows
 
 
-def parse_radio_pdf_questions(file_bytes: bytes) -> List[Dict]:
+def parse_radio_pdf_questions(source: Union[str, bytes]) -> List[Dict]:
     all_lines: List[Dict] = []
     all_radio_rows: List[Dict] = []
 
-    with pdfplumber.open(io.BytesIO(file_bytes)) as pdf:
+    opener = source if isinstance(source, str) else io.BytesIO(source)
+    with pdfplumber.open(opener) as pdf:
         for page_number, page in enumerate(pdf.pages, start=1):
             lines = extract_pdf_line_groups(page, page_number)
             all_lines.extend(lines)
@@ -270,14 +272,15 @@ def parse_radio_pdf_questions(file_bytes: bytes) -> List[Dict]:
     return questions
 
 
-def extract_text_from_pdf_bytes(file_bytes: bytes) -> str:
+def extract_text_from_pdf_bytes(source: Union[str, bytes]) -> str:
     text_parts: List[str] = []
     pages_lines: List[List[str]] = []
     header_counts: Dict[str, int] = {}
     footer_counts: Dict[str, int] = {}
     header_footer_lines = 3
 
-    with pdfplumber.open(io.BytesIO(file_bytes)) as pdf:
+    opener = source if isinstance(source, str) else io.BytesIO(source)
+    with pdfplumber.open(opener) as pdf:
         for page in pdf.pages:
             page_text = page.extract_text(x_tolerance=2, y_tolerance=2) or ""
             lines = [
@@ -309,8 +312,8 @@ def extract_text_from_pdf_bytes(file_bytes: bytes) -> str:
     return "\n".join(text_parts)
 
 
-def parse_pdf_questions(file_bytes: bytes) -> List[Dict]:
-    radio_questions = parse_radio_pdf_questions(file_bytes)
+def parse_pdf_questions(source: Union[str, bytes]) -> List[Dict]:
+    radio_questions = parse_radio_pdf_questions(source)
     if radio_questions:
         return radio_questions
-    return parse_questions(extract_text_from_pdf_bytes(file_bytes))
+    return parse_questions(extract_text_from_pdf_bytes(source))
