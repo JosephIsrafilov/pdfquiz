@@ -38,6 +38,8 @@ def is_noise_line(line: str) -> bool:
         return True
     if re.match(r"^\d{1,2}/\d{1,2}/\d{4}$", line):
         return True
+    if re.match(r"^--\s*\d+\s+of\s+\d+\s*--$", line, re.IGNORECASE):
+        return True
     prefixes = (
         "Fənn",
         "Fәnn",
@@ -89,6 +91,11 @@ def split_numbered_blocks(lines: List[str]) -> List[Dict]:
     last_number: Optional[int] = None
 
     for line in lines:
+        if _ANY_MARKER_RE.match(line):
+            if current:
+                current["lines"].append(line)
+            continue
+
         # Pass None for last_number to bypass the +5 gap limit; enforce only forward-ordering here
         match = match_question_line(line, 0, None)
         if match and (last_number is None or match[0] > last_number):
