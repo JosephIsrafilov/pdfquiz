@@ -11,6 +11,17 @@ from app.parsing import parse_uploaded_file
 
 
 def register_api_routes(app):
+    @app.route("/health", methods=["GET"], endpoint="health")
+    def health():
+        from app.database import get_db_connection
+        try:
+            with get_db_connection() as conn:
+                conn.execute("SELECT 1")
+            db_status = "connected"
+        except Exception as exc:
+            db_status = f"error: {exc}"
+        return jsonify({"status": "ok", "db": db_status})
+
     @app.route("/api/parse", methods=["POST"], endpoint="parse_document")
     def parse_document():
         document_id_raw = request.form.get("document_id", "").strip()

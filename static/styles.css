@@ -14,7 +14,91 @@
   --shadow: 0 1px 0 rgba(15, 23, 42, 0.06);
   --radius: 14px;
   --quiz-font-size: 1rem;
+  --surface: #f8fafc;
+  --surface-hover: #f1f5f9;
 }
+
+/* ── Dark mode ─────────────────────────────────────────────────────────── */
+
+@media (prefers-color-scheme: dark) {
+  :root:not(.light) {
+    --bg: #0f172a;
+    --panel: #1e293b;
+    --ink: #f1f5f9;
+    --muted: #94a3b8;
+    --accent: #e2e8f0;
+    --accent-2: #2dd4bf;
+    --accent-3: #cbd5e1;
+    --danger: #f87171;
+    --danger-soft: #450a0a;
+    --ok: #4ade80;
+    --ok-soft: #052e16;
+    --line: #334155;
+    --shadow: 0 1px 0 rgba(0, 0, 0, 0.3);
+    --surface: #1e293b;
+    --surface-hover: #273548;
+  }
+}
+
+body.dark {
+  --bg: #0f172a;
+  --panel: #1e293b;
+  --ink: #f1f5f9;
+  --muted: #94a3b8;
+  --accent: #e2e8f0;
+  --accent-2: #2dd4bf;
+  --accent-3: #cbd5e1;
+  --danger: #f87171;
+  --danger-soft: #450a0a;
+  --ok: #4ade80;
+  --ok-soft: #052e16;
+  --line: #334155;
+  --shadow: 0 1px 0 rgba(0, 0, 0, 0.3);
+  --surface: #1e293b;
+  --surface-hover: #273548;
+}
+
+body.light {
+  --bg: #ffffff;
+  --panel: #ffffff;
+  --ink: #0f172a;
+  --muted: #475569;
+  --accent: #111827;
+  --accent-2: #0f766e;
+  --accent-3: #1f2937;
+  --danger: #ef4444;
+  --danger-soft: #fef2f2;
+  --ok: #22c55e;
+  --ok-soft: #f0fdf4;
+  --line: #e2e8f0;
+  --shadow: 0 1px 0 rgba(15, 23, 42, 0.06);
+  --surface: #f8fafc;
+  --surface-hover: #f1f5f9;
+}
+
+/* Dark mode theme toggle button */
+.theme-toggle {
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  border-radius: 10px;
+  padding: 8px 12px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 600;
+  transition: background 0.15s, transform 0.2s ease, box-shadow 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  line-height: 1;
+}
+
+.theme-toggle:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
+}
+
 
 * {
   box-sizing: border-box;
@@ -161,7 +245,7 @@ h2,
   padding: 12px 14px;
   border: 1px solid var(--line);
   border-radius: 12px;
-  background: #fafafa;
+  background: var(--surface);
   color: var(--muted);
   font-size: 0.95rem;
   line-height: 1.5;
@@ -203,7 +287,7 @@ h2,
 .auth-form,
 .admin-form,
 .admin-column {
-  background: #ffffff;
+  background: var(--panel);
   border: 1px solid var(--line);
   border-radius: 14px;
 }
@@ -318,7 +402,7 @@ h2,
   padding: 10px 12px;
   border-radius: 10px;
   border: 1px solid var(--line);
-  background: #ffffff;
+  background: var(--panel);
   font: inherit;
   color: var(--ink);
 }
@@ -385,7 +469,7 @@ input[type="range"] {
   border-radius: 12px;
   font-weight: 600;
   cursor: pointer;
-  background: #f1f5f9;
+  background: var(--surface);
   color: var(--ink);
   transition: transform 0.2s ease, box-shadow 0.2s ease;
   font: inherit;
@@ -432,7 +516,7 @@ input[type="range"] {
   border: 1px solid var(--line);
   border-radius: 12px;
   padding: 12px;
-  background: #ffffff;
+  background: var(--panel);
   cursor: pointer;
 }
 
@@ -539,7 +623,7 @@ input[type="range"] {
 .history-card__stats span {
   padding: 5px 10px;
   border-radius: 999px;
-  background: #f8fafc;
+  background: var(--surface);
   border: 1px solid var(--line);
   font-size: 0.82rem;
   font-weight: 600;
@@ -576,7 +660,7 @@ input[type="range"] {
   padding: 18px;
   border-radius: 16px;
   border: 1px solid var(--line);
-  background: #ffffff;
+  background: var(--panel);
   box-shadow: 0 1px 0 rgba(15, 23, 42, 0.06);
   animation: rise 0.4s ease forwards;
 }
@@ -618,7 +702,7 @@ input[type="range"] {
   grid-template-columns: 22px 32px 1fr;
   gap: 12px;
   align-items: start;
-  background: #ffffff;
+  background: var(--panel);
   padding: 10px 12px;
   border-radius: 12px;
   border: 1px solid var(--line);
@@ -670,7 +754,7 @@ input[type="range"] {
   align-items: center;
   justify-content: center;
   color: var(--accent-3);
-  background: #f8fafc;
+  background: var(--surface);
   align-self: flex-start;
 }
 
@@ -740,7 +824,7 @@ input[type="range"] {
   padding: 16px;
   border-radius: 16px;
   border: 1px solid var(--line);
-  background: #ffffff;
+  background: var(--panel);
   margin-bottom: 18px;
   white-space: pre-line;
 }
@@ -749,7 +833,7 @@ input[type="range"] {
   padding: 14px 16px;
   border-radius: 16px;
   border: 1px solid var(--line);
-  background: #ffffff;
+  background: var(--panel);
   margin-bottom: 18px;
   display: flex;
   flex-wrap: wrap;
@@ -765,7 +849,7 @@ input[type="range"] {
 
 .mistake-chip {
   border: 1px solid var(--line);
-  background: #f8fafc;
+  background: var(--surface);
   border-radius: 999px;
   padding: 6px 12px;
   font-weight: 600;
@@ -781,9 +865,9 @@ input[type="range"] {
   padding: 20px;
   text-align: center;
   color: var(--muted);
-  border: 1px dashed #cbd5e1;
+  border: 1px dashed var(--line);
   border-radius: 14px;
-  background: #ffffff;
+  background: var(--panel);
 }
 
 .overlay {
@@ -802,7 +886,8 @@ input[type="range"] {
 }
 
 .loader-card {
-  background: white;
+  background: var(--panel);
+  color: var(--ink);
   padding: 24px 28px;
   border-radius: 16px;
   display: flex;
@@ -852,7 +937,7 @@ input[type="range"] {
 
 .hl-menu {
   position: absolute;
-  background: #ffffff;
+  background: var(--panel);
   border: 1px solid var(--line);
   box-shadow: var(--shadow);
   border-radius: 12px;
@@ -864,7 +949,8 @@ input[type="range"] {
 
 .hl-menu button {
   border: none;
-  background: #f8fafc;
+  background: var(--surface);
+  color: var(--ink);
   padding: 8px 12px;
   border-radius: 8px;
   cursor: pointer;
@@ -872,7 +958,7 @@ input[type="range"] {
 }
 
 .hl-menu button:hover {
-  background: #e2e8f0;
+  background: var(--surface-hover);
 }
 
 .auth-layout {
@@ -885,7 +971,7 @@ input[type="range"] {
 
 .auth-card {
   width: min(520px, 100%);
-  background: #ffffff;
+  background: var(--panel);
   border: 1px solid var(--line);
   border-radius: 16px;
   padding: 24px;
@@ -951,6 +1037,13 @@ input[type="range"] {
   display: flex;
   gap: 10px;
   flex-wrap: wrap;
+}
+
+/* Lazy rendering sentinel – invisible 1px trigger for IntersectionObserver */
+.lazy-sentinel {
+  height: 1px;
+  width: 100%;
+  visibility: hidden;
 }
 
 @media (max-width: 720px) {

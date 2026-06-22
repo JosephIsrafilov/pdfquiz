@@ -24,6 +24,7 @@
           <span>PDF / DOCX Quiz</span>
         </a>
         <div class="topbar-actions">
+          <button id="themeToggle" class="theme-toggle" type="button" aria-label="Переключить тему">🌙</button>
           <span class="user-pill">{{ current_user.username }} <strong>admin</strong></span>
           <a class="button" href="{{ url_for('index') }}">На сайт</a>
           <form method="post" action="{{ url_for('logout') }}">

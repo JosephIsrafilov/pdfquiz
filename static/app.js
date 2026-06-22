@@ -169,99 +169,181 @@ function applyFontSize(value) {
   localStorage.setItem("quizFontSize", String(normalized));
 }
 
+// ---------------------------------------------------------------------------
+// Dark mode
+// ---------------------------------------------------------------------------
+
+const THEME_KEY = 'theme';
+const BATCH_SIZE = 20;
+
+function applyTheme(theme) {
+  document.body.classList.remove('dark', 'light');
+  if (theme === 'dark') {
+    document.body.classList.add('dark');
+  } else if (theme === 'light') {
+    document.body.classList.add('light');
+  }
+  // Update all toggle buttons on the page
+  const icon = theme === 'dark' ? '☀️' : theme === 'light' ? '🌙' : '🌗';
+  document.querySelectorAll('.theme-toggle').forEach(btn => {
+    btn.textContent = icon;
+  });
+}
+
+function initTheme() {
+  const saved = localStorage.getItem(THEME_KEY);
+  applyTheme(saved || 'auto');
+}
+
+function toggleTheme() {
+  const current = localStorage.getItem(THEME_KEY) || 'auto';
+  const next = current === 'auto' ? 'dark' : current === 'dark' ? 'light' : 'auto';
+  localStorage.setItem(THEME_KEY, next);
+  applyTheme(next);
+}
+
+document.querySelectorAll('.theme-toggle').forEach(btn => {
+  btn.addEventListener('click', toggleTheme);
+});
+
+// ---------------------------------------------------------------------------
+// Lazy quiz rendering
+// ---------------------------------------------------------------------------
+
+let _lazyObserver = null;
+
+function buildQuestionCard(question, index) {
+  const card = document.createElement("div");
+  card.className = "question-card";
+  card.dataset.q = index;
+  card.style.animationDelay = `${Math.min(index, BATCH_SIZE - 1) * 0.02}s`;
+
+  const title = createHighlightText(
+    `<span class="q-number">${index + 1}.</span> ${question.text} ${
+      question.number ? `<span class="origin">(ориг. №${question.number})</span>` : ""
+    }`,
+    true
+  );
+  title.classList.add("question-title");
+  card.appendChild(title);
+
+  const options = document.createElement("div");
+  options.className = "options";
+
+  question.options.forEach((option, optIndex) => {
+    const optionRow = document.createElement("label");
+    optionRow.className = "option";
+    optionRow.dataset.q = index;
+    optionRow.dataset.opt = optIndex;
+
+    const radio = document.createElement("input");
+    radio.type = "radio";
+    radio.name = `q_${index}`;
+    radio.value = String(optIndex);
+    radio.checked = state.answers[index] === optIndex;
+
+    const marker = document.createElement("span");
+    marker.className = "option-label";
+    marker.textContent = String.fromCharCode(65 + optIndex);
+
+    const text = createHighlightText(option.text, false);
+    text.classList.add("option-text");
+
+    const setAnswer = () => {
+      state.answers[index] = optIndex;
+      radio.checked = true;
+      if (state.checkedQuestions[index]) {
+        clearQuestionFeedback(index);
+        delete state.checkedQuestions[index];
+      }
+    };
+
+    radio.addEventListener("change", setAnswer);
+    optionRow.addEventListener("click", (event) => {
+      const selection = window.getSelection();
+      if (selection && selection.toString()) {
+        return;
+      }
+      if (event.target.closest(".hl-text")) {
+        setAnswer();
+      }
+    });
+
+    optionRow.appendChild(radio);
+    optionRow.appendChild(marker);
+    optionRow.appendChild(text);
+    options.appendChild(optionRow);
+  });
+
+  card.appendChild(options);
+
+  if (instantCheck && instantCheck.checked) {
+    const actions = document.createElement("div");
+    actions.className = "question-actions";
+
+    const status = document.createElement("div");
+    status.className = "question-status hidden";
+    status.dataset.statusFor = index;
+
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "button button--soft";
+    button.textContent = "Проверить вопрос";
+    button.addEventListener("click", () => {
+      checkSingleQuestion(index);
+    });
+
+    actions.appendChild(status);
+    actions.appendChild(button);
+    card.appendChild(actions);
+  }
+
+  return card;
+}
+
 function renderQuiz() {
   quizArea.innerHTML = "";
   quizEmpty.classList.add("hidden");
 
-  state.quiz.forEach((question, index) => {
-    const card = document.createElement("div");
-    card.className = "question-card";
-    card.dataset.q = index;
-    card.style.animationDelay = `${index * 0.02}s`;
+  if (_lazyObserver) {
+    _lazyObserver.disconnect();
+    _lazyObserver = null;
+  }
 
-    const title = createHighlightText(
-      `<span class="q-number">${index + 1}.</span> ${question.text} ${
-        question.number ? `<span class="origin">(ориг. №${question.number})</span>` : ""
-      }`,
-      true
-    );
-    title.classList.add("question-title");
-    card.appendChild(title);
+  const total = state.quiz.length;
+  if (!total) return;
 
-    const options = document.createElement("div");
-    options.className = "options";
+  // Render first batch immediately
+  const firstBatch = Math.min(BATCH_SIZE, total);
+  for (let i = 0; i < firstBatch; i++) {
+    quizArea.appendChild(buildQuestionCard(state.quiz[i], i));
+  }
 
-    question.options.forEach((option, optIndex) => {
-      const optionRow = document.createElement("label");
-      optionRow.className = "option";
-      optionRow.dataset.q = index;
-      optionRow.dataset.opt = optIndex;
+  if (total <= firstBatch) return;
 
-      const radio = document.createElement("input");
-      radio.type = "radio";
-      radio.name = `q_${index}`;
-      radio.value = String(optIndex);
-      radio.checked = state.answers[index] === optIndex;
+  // Sentinel div triggers loading of remaining cards
+  let nextIndex = firstBatch;
+  const sentinel = document.createElement("div");
+  sentinel.className = "lazy-sentinel";
+  quizArea.appendChild(sentinel);
 
-      const marker = document.createElement("span");
-      marker.className = "option-label";
-      marker.textContent = String.fromCharCode(65 + optIndex);
-
-      const text = createHighlightText(option.text, false);
-      text.classList.add("option-text");
-
-      const setAnswer = () => {
-        state.answers[index] = optIndex;
-        radio.checked = true;
-        if (state.checkedQuestions[index]) {
-          clearQuestionFeedback(index);
-          delete state.checkedQuestions[index];
-        }
-      };
-
-      radio.addEventListener("change", setAnswer);
-      optionRow.addEventListener("click", (event) => {
-        const selection = window.getSelection();
-        if (selection && selection.toString()) {
-          return;
-        }
-        if (event.target.closest(".hl-text")) {
-          setAnswer();
-        }
-      });
-
-      optionRow.appendChild(radio);
-      optionRow.appendChild(marker);
-      optionRow.appendChild(text);
-      options.appendChild(optionRow);
-    });
-
-    card.appendChild(options);
-
-    if (instantCheck && instantCheck.checked) {
-      const actions = document.createElement("div");
-      actions.className = "question-actions";
-
-      const status = document.createElement("div");
-      status.className = "question-status hidden";
-      status.dataset.statusFor = index;
-
-      const button = document.createElement("button");
-      button.type = "button";
-      button.className = "button button--soft";
-      button.textContent = "Проверить вопрос";
-      button.addEventListener("click", () => {
-        checkSingleQuestion(index);
-      });
-
-      actions.appendChild(status);
-      actions.appendChild(button);
-      card.appendChild(actions);
+  _lazyObserver = new IntersectionObserver((entries) => {
+    if (!entries[0].isIntersecting) return;
+    // Render next batch
+    const end = Math.min(nextIndex + BATCH_SIZE, total);
+    for (let i = nextIndex; i < end; i++) {
+      quizArea.insertBefore(buildQuestionCard(state.quiz[i], i), sentinel);
     }
+    nextIndex = end;
+    if (nextIndex >= total) {
+      _lazyObserver.disconnect();
+      sentinel.remove();
+    }
+  }, { rootMargin: "200px" });
 
-    quizArea.appendChild(card);
-  });
+  _lazyObserver.observe(sentinel);
 }
+
 
 function getQuestionAssessment(question, selected) {
   const correctIndices = question.options
@@ -357,10 +439,27 @@ function checkSingleQuestion(qIndex) {
 }
 
 function applyQuizFeedback() {
+  // Flush any remaining lazily-unrendered cards before applying feedback
+  if (_lazyObserver) {
+    _lazyObserver.disconnect();
+    _lazyObserver = null;
+    const sentinel = quizArea.querySelector('.lazy-sentinel');
+    const startIndex = quizArea.querySelectorAll('.question-card').length;
+    for (let i = startIndex; i < state.quiz.length; i++) {
+      if (sentinel) {
+        quizArea.insertBefore(buildQuestionCard(state.quiz[i], i), sentinel);
+      } else {
+        quizArea.appendChild(buildQuestionCard(state.quiz[i], i));
+      }
+    }
+    if (sentinel) sentinel.remove();
+  }
+
   state.quiz.forEach((_question, qIndex) => {
     applyQuestionFeedback(qIndex);
     state.checkedQuestions[qIndex] = true;
   });
+
 }
 
 function scrollToQuestion(index) {
@@ -892,5 +991,7 @@ document.addEventListener("click", (event) => {
 });
 
 applyFontSize(localStorage.getItem("quizFontSize") || 100);
+initTheme();
 updatePublicLink();
 updateControlsState();
+
