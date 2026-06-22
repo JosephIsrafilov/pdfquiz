@@ -2,6 +2,7 @@ import io
 import json
 import os
 import re
+import secrets
 import sqlite3
 import tempfile
 import xml.etree.ElementTree as ET
@@ -33,6 +34,24 @@ from werkzeug.exceptions import RequestEntityTooLarge
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 25 * 1024 * 1024
 app.secret_key = os.environ.get("SECRET_KEY", "change-this-secret-key")
+
+
+def generate_csrf_token():
+    if "csrf_token" not in session:
+        session["csrf_token"] = secrets.token_hex(32)
+    return session["csrf_token"]
+
+
+app.jinja_env.globals["csrf_token"] = generate_csrf_token
+
+
+@app.before_request
+def validate_csrf():
+    if request.method in ("GET", "HEAD", "OPTIONS", "TRACE"):
+        return
+    token = request.form.get("csrf_token") or request.headers.get("X-CSRFToken")
+    if not token or token != session.get("csrf_token"):
+        abort(403)
 
 
 @app.after_request

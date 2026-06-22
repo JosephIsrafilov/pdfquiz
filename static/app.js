@@ -464,7 +464,10 @@ async function saveResult(summary) {
 
   const response = await fetch("/api/results", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      "X-CSRFToken": document.querySelector('meta[name="csrf-token"]').content,
+    },
     body: JSON.stringify({
       ...summary,
       document_id: state.sourceDocumentId,
@@ -564,14 +567,47 @@ function renderSummary() {
   };
 }
 
+function xhrParse(formData) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    const progressWrap = document.getElementById("uploadProgressWrap");
+    const progressBar = document.getElementById("uploadProgressBar");
+    const progressText = document.getElementById("uploadProgressText");
+    const spinner = document.getElementById("loadingSpinner");
+
+    const hasFile = formData.has("file") && formData.get("file") instanceof File && formData.get("file").size > 0;
+    if (hasFile) {
+      spinner.classList.add("hidden");
+      progressWrap.classList.remove("hidden");
+      progressText.classList.remove("hidden");
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable) {
+          const pct = Math.round((e.loaded / e.total) * 100);
+          progressBar.style.width = pct + "%";
+          progressText.textContent = pct + "%";
+        }
+      };
+    }
+
+    xhr.open("POST", "/api/parse");
+    xhr.setRequestHeader("X-CSRFToken", document.querySelector('meta[name="csrf-token"]').content);
+    xhr.onload = () => {
+      spinner.classList.remove("hidden");
+      progressWrap.classList.add("hidden");
+      progressText.classList.add("hidden");
+      progressBar.style.width = "0%";
+      resolve({ status: xhr.status, ok: xhr.status >= 200 && xhr.status < 300, text: () => xhr.responseText });
+    };
+    xhr.onerror = () => reject(new Error("Сетевая ошибка при загрузке файла"));
+    xhr.send(formData);
+  });
+}
+
 async function loadQuestions(formData) {
   showLoading(true);
   try {
-    const response = await fetch("/api/parse", {
-      method: "POST",
-      body: formData,
-    });
-    const raw = await response.text();
+    const response = await xhrParse(formData);
+    const raw = response.text();
     let data = null;
 
     try {

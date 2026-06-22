@@ -14,6 +14,7 @@
       rel="stylesheet"
       href="{{ url_for('static', filename='styles.css') }}"
     />
+    <meta name="csrf-token" content="{{ csrf_token() }}" />
   </head>
   <body>
     <div class="auth-layout">
@@ -28,6 +29,7 @@
         <div class="form-alert">{{ error }}</div>
         {% endif %}
         <form method="post" class="auth-form">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
           <input type="hidden" name="next" value="{{ next_url }}" />
           <label class="control-label" for="username">Логин</label>
           <input id="username" name="username" class="text-input" type="text" required />

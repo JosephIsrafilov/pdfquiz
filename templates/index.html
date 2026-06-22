@@ -14,6 +14,7 @@
       rel="stylesheet"
       href="{{ url_for('static', filename='styles.css') }}"
     />
+    <meta name="csrf-token" content="{{ csrf_token() }}" />
   </head>
   <body>
     <div class="app">
@@ -35,6 +36,7 @@
           <a class="button" href="{{ url_for('admin_panel') }}">Админ-панель</a>
           {% endif %}
           <form method="post" action="{{ url_for('logout') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
             <button class="button" type="submit">Выйти</button>
           </form>
           {% else %}
@@ -203,10 +205,14 @@
 
     <div id="loadingOverlay" class="overlay hidden">
       <div class="loader-card">
-        <div class="spinner"></div>
+        <div id="loadingSpinner" class="spinner"></div>
         <div>
           <div class="loader-title">Обрабатываем вопросы</div>
           <div class="loader-subtitle">Это может занять несколько секунд</div>
+          <div id="uploadProgressWrap" class="upload-progress-wrap hidden">
+            <div id="uploadProgressBar" class="upload-progress-bar" style="width:0%"></div>
+          </div>
+          <div id="uploadProgressText" class="upload-progress-text hidden">0%</div>
         </div>
       </div>
     </div>
