@@ -491,11 +491,11 @@ input[type="range"] {
 
 .button--primary {
   background: var(--accent);
-  color: #ffffff;
+  color: var(--bg);
 }
 
 .button--soft {
-  background: #f8fafc;
+  background: var(--surface);
   border: 1px solid var(--line);
 }
 
