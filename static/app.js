@@ -282,11 +282,21 @@ function renderCatalog() {
       if (!groups.has(stage)) groups.set(stage, []);
       groups.get(stage).push(topic);
     });
+    let stageIndex = 0;
     groups.forEach((topics, stage) => {
       const section = document.createElement("section");
       section.className = "topic-stage";
+      // Open the first stage by default
+      if (stageIndex === 0) {
+        section.classList.add("is-open");
+      }
+      
       const heading = document.createElement("h3");
       heading.textContent = t(stage);
+      heading.addEventListener("click", () => {
+        section.classList.toggle("is-open");
+      });
+      
       const grid = document.createElement("div");
       grid.className = "topic-grid";
       topics.forEach((topic) => {
@@ -310,6 +320,7 @@ function renderCatalog() {
       });
       section.append(heading, grid);
       topicList.appendChild(section);
+      stageIndex++;
     });
   }
 

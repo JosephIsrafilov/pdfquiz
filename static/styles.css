@@ -1268,12 +1268,53 @@ main {
   gap: 28px;
 }
 
+.topic-stage {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  overflow: hidden;
+}
+
 .topic-stage h3 {
-  margin: 0 0 12px;
+  margin: 0;
+  padding: 16px 20px;
   color: var(--muted);
   font-size: 0.82rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  user-select: none;
+  transition: background 0.15s;
+}
+
+.topic-stage h3:hover {
+  background: var(--bg-hover);
+}
+
+.topic-stage h3::after {
+  content: '▼';
+  font-size: 0.9em;
+  transition: transform 0.2s;
+}
+
+.topic-stage.is-open h3 {
+  border-bottom: 1px solid var(--line);
+}
+
+.topic-stage.is-open h3::after {
+  transform: rotate(180deg);
+}
+
+.topic-stage .topic-grid {
+  display: none;
+  padding: 20px;
+}
+
+.topic-stage.is-open .topic-grid {
+  display: grid;
 }
 
 .topic-card {
