@@ -641,14 +641,68 @@ async function checkOne(question, card) {
   }
 }
 
+function triggerConfetti() {
+  const colors = ["#10b981", "#3b82f6", "#f59e0b", "#8b5cf6", "#ec4899"];
+  for (let i = 0; i < 50; i++) {
+    const confetti = document.createElement("div");
+    confetti.className = "confetti";
+    confetti.style.background = colors[Math.floor(Math.random() * colors.length)];
+    confetti.style.left = Math.random() * 100 + "vw";
+    confetti.style.animationDelay = Math.random() * 2 + "s";
+    confetti.style.animationDuration = Math.random() * 3 + 2 + "s";
+    document.body.appendChild(confetti);
+    setTimeout(() => confetti.remove(), 5000);
+  }
+}
+
 function renderResult(result, savedResult) {
+  const scorePercent = result.score_percent;
+  let gradeColor = scorePercent >= 80 ? '#10b981' : scorePercent >= 50 ? '#f59e0b' : '#ef4444';
+  let gradeMessage = scorePercent >= 80 ? (t("excellent") || "Excellent!") : scorePercent >= 50 ? (t("good") || "Good Job!") : (t("needs_practice") || "Needs Practice");
+
   summaryBox.innerHTML = `
-    <strong>${t("score")}: ${result.score_percent}%</strong>
-    <span>${t("correctAnswers", { correct: result.correct, total: result.total })}</span>
-    <span>${t("unanswered", { count: result.unanswered })}</span>
-    <span>${savedResult ? t("saved") : t("guest")}</span>
+    <div class="score-card" style="--score-color: ${gradeColor}">
+      <div class="score-circle">
+        <svg viewBox="0 0 36 36" class="circular-chart">
+          <path class="circle-bg"
+            d="M18 2.0845
+              a 15.9155 15.9155 0 0 1 0 31.831
+              a 15.9155 15.9155 0 0 1 0 -31.831"
+          />
+          <path class="circle animate-circle"
+            stroke-dasharray="${scorePercent}, 100"
+            d="M18 2.0845
+              a 15.9155 15.9155 0 0 1 0 31.831
+              a 15.9155 15.9155 0 0 1 0 -31.831"
+          />
+          <text x="18" y="20.35" class="percentage animate-fade-in">${scorePercent}%</text>
+        </svg>
+      </div>
+      <div class="score-details">
+        <h2 class="score-message animate-slide-up" style="color: ${gradeColor}">${gradeMessage}</h2>
+        <div class="score-stats">
+          <div class="stat-item animate-slide-up" style="animation-delay: 0.1s">
+            <strong>${result.correct} / ${result.total}</strong>
+            <span>Correct</span>
+          </div>
+          <div class="stat-item animate-slide-up" style="animation-delay: 0.2s">
+            <strong>${result.unanswered}</strong>
+            <span>Unanswered</span>
+          </div>
+          <div class="stat-item animate-slide-up" style="animation-delay: 0.3s">
+            <strong>${savedResult ? "Saved" : "Guest"}</strong>
+            <span>Status</span>
+          </div>
+        </div>
+      </div>
+    </div>
   `;
-  summaryBox.classList.remove("hidden");
+  summaryBox.className = "results-summary results-summary--animated";
+
+  if (scorePercent >= 80) {
+    triggerConfetti();
+  }
+
 
   topicResults.innerHTML = "";
   Object.entries(result.topic_stats).forEach(([topic, stats]) => {
