@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="ru">
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Регистрация</title>
+    <title>Register · Knowledge Check</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -20,30 +20,35 @@
     <div class="auth-layout">
       <div class="auth-card">
         <a class="brand brand--auth" href="{{ url_for('index') }}">
-          <span class="brand-mark">Q</span>
-          <span>PDF / DOCX Quiz</span>
+          <span class="brand-mark">K</span>
+          <span>Knowledge Check</span>
         </a>
-        <h1>Регистрация</h1>
-        <p class="subtitle">После регистрации история попыток и ошибки будут храниться в аккаунте.</p>
+        <div class="language-switch auth-language">
+          <button class="language-button" type="button" data-language="en">EN</button>
+          <button class="language-button" type="button" data-language="ru">RU</button>
+        </div>
+        <h1 data-en="Create an account" data-ru="Создать аккаунт">Create an account</h1>
+        <p class="subtitle" data-en="Your test history and mistake reviews will be stored in your account." data-ru="История тестов и разбор ошибок будут храниться в вашем аккаунте.">Your test history and mistake reviews will be stored in your account.</p>
         {% if error %}
         <div class="form-alert">{{ error }}</div>
         {% endif %}
         <form method="post" class="auth-form">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
           <input type="hidden" name="next" value="{{ next_url }}" />
-          <label class="control-label" for="username">Логин</label>
+          <label class="control-label" for="username" data-en="Username" data-ru="Логин">Username</label>
           <input id="username" name="username" class="text-input" type="text" required />
-          <label class="control-label" for="password">Пароль</label>
+          <label class="control-label" for="password" data-en="Password" data-ru="Пароль">Password</label>
           <input id="password" name="password" class="text-input" type="password" required />
-          <label class="control-label" for="password_repeat">Повтори пароль</label>
+          <label class="control-label" for="password_repeat" data-en="Repeat password" data-ru="Повторите пароль">Repeat password</label>
           <input id="password_repeat" name="password_repeat" class="text-input" type="password" required />
-          <button class="button button--primary" type="submit">Создать аккаунт</button>
+          <button class="button button--primary" type="submit" data-en="Create account" data-ru="Создать аккаунт">Create account</button>
         </form>
         <div class="auth-links">
-          Уже есть аккаунт?
-          <a href="{{ url_for('login', next=next_url) }}">Войти</a>
+          <span data-en="Already registered?" data-ru="Уже есть аккаунт?">Already registered?</span>
+          <a href="{{ url_for('login', next=next_url) }}" data-en="Log in" data-ru="Войти">Log in</a>
         </div>
       </div>
     </div>
+    <script src="{{ url_for('static', filename='page-i18n.js') }}"></script>
   </body>
 </html>

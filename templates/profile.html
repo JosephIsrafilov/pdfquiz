@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="ru">
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Профиль</title>
+    <title>Profile · Knowledge Check</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -19,11 +19,14 @@
     <div class="app">
       <header class="topbar">
         <a class="brand" href="{{ url_for('index') }}">
-          <span class="brand-mark">Q</span>
-          <span>PDF / DOCX Quiz</span>
+          <span class="brand-mark">K</span>
+          <span>Knowledge Check</span>
         </a>
         <div class="topbar-actions">
-          <button id="themeToggle" class="theme-toggle" type="button" aria-label="Переключить тему">🌙</button>
+          <div class="language-switch">
+            <button class="language-button" type="button" data-language="en">EN</button>
+            <button class="language-button" type="button" data-language="ru">RU</button>
+          </div>
           <span class="user-pill">
             {{ current_user.username }}
             {% if current_user.is_admin %}
@@ -31,27 +34,27 @@
             {% endif %}
           </span>
           {% if current_user.is_admin %}
-          <a class="button" href="{{ url_for('admin_panel') }}">Админ-панель</a>
+          <a class="button" href="{{ url_for('admin_panel') }}" data-en="Teacher panel" data-ru="Панель преподавателя">Teacher panel</a>
           {% endif %}
-          <a class="button" href="{{ url_for('index') }}">На главную</a>
+          <a class="button" href="{{ url_for('index') }}" data-en="Back to tests" data-ru="К тестам">Back to tests</a>
           <form method="post" action="{{ url_for('logout') }}">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
-            <button class="button" type="submit">Выйти</button>
+            <button class="button" type="submit" data-en="Log out" data-ru="Выйти">Log out</button>
           </form>
         </div>
       </header>
 
       <section class="panel">
         <div class="section-head">
-          <h1>Профиль</h1>
-          <p>Здесь сохраняются прошлые тесты, результаты и номера ошибок.</p>
+          <h1 data-en="Profile" data-ru="Профиль">Profile</h1>
+          <p data-en="Your completed knowledge checks and detailed reviews are stored here." data-ru="Здесь хранятся пройденные тесты и подробный разбор ответов.">Your completed knowledge checks and detailed reviews are stored here.</p>
         </div>
       </section>
 
       <section class="panel">
         <div class="section-head">
-          <h2>История попыток</h2>
-          <p>Последние сохраненные результаты этого аккаунта.</p>
+          <h2 data-en="Attempt history" data-ru="История попыток">Attempt history</h2>
+          <p data-en="The latest saved results for this account." data-ru="Последние сохраненные результаты этого аккаунта.">The latest saved results for this account.</p>
         </div>
         <div class="history-grid history-grid--wide">
           {% if results %}
@@ -60,33 +63,34 @@
               <div class="history-card__title">{{ result.source_label }}</div>
               <div class="history-card__meta">{{ result.created_at }}</div>
               <div class="history-card__stats">
-                <span>{{ result.correct }}/{{ result.graded }} верно</span>
-                <span>{{ result.quiz_size }} в пробнике</span>
-                <span>{{ result.unanswered }} без ответа</span>
+                <span>{{ result.correct }}/{{ result.graded }} <span data-en="correct" data-ru="верно">correct</span></span>
+                <span>{{ result.quiz_size }} <span data-en="questions" data-ru="вопросов">questions</span></span>
+                <span>{{ result.unanswered }} <span data-en="unanswered" data-ru="без ответа">unanswered</span></span>
               </div>
               {% if result.attempt_available %}
               <div class="history-card__actions">
-                <a class="button" href="{{ url_for('profile_result_detail', result_id=result.id) }}">Открыть попытку</a>
+                <a class="button" href="{{ url_for('profile_result_detail', result_id=result.id) }}" data-en="Open review" data-ru="Открыть разбор">Open review</a>
               </div>
               {% endif %}
               {% if result.mistake_numbers %}
               <div class="history-card__mistakes">
-                Ошибки по номерам в документе: {{ result.mistake_numbers|join(', ') }}
+                <span data-en="Questions to review:" data-ru="Вопросы для разбора:">Questions to review:</span> {{ result.mistake_numbers|join(', ') }}
               </div>
               {% else %}
               <div class="history-card__mistakes history-card__mistakes--ok">
-                Ошибок нет.
+                <span data-en="No mistakes." data-ru="Ошибок нет.">No mistakes.</span>
               </div>
               {% endif %}
             </article>
             {% endfor %}
           {% else %}
           <div class="empty-state">
-            У этого аккаунта пока нет сохраненных результатов.
+            <span data-en="This account has no saved results yet." data-ru="У этого аккаунта пока нет сохраненных результатов.">This account has no saved results yet.</span>
           </div>
           {% endif %}
         </div>
       </section>
     </div>
+    <script src="{{ url_for('static', filename='page-i18n.js') }}"></script>
   </body>
 </html>

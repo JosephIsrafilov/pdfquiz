@@ -1,18 +1,86 @@
 import json
 from zipfile import BadZipFile
 
-from flask import jsonify, redirect, render_template, request, session, url_for
+from flask import redirect, render_template, request, session, url_for
 
-from app.models.document import (
-    delete_document,
-    fetch_document,
-    fetch_documents,
-    save_document,
-    serialize_document,
+from app.models.knowledge import (
+    create_course,
+    create_question,
+    create_topic,
+    delete_question,
+    fetch_catalog,
+    fetch_question,
+    fetch_questions_for_admin,
+    toggle_question,
+    update_question,
 )
-from app.models.user import delete_user, fetch_user_by_id, fetch_users, serialize_user, toggle_user_admin
-from app.utils import admin_required
+from app.models.user import (
+    delete_user,
+    fetch_user_by_id,
+    fetch_users,
+    serialize_user,
+    toggle_user_admin,
+)
 from app.parsing import parse_uploaded_file
+from app.utils import admin_required
+
+
+DIFFICULTIES = {"beginner", "intermediate", "advanced"}
+
+
+def _redirect_with(message_type, message):
+    return redirect(url_for("admin_panel", **{message_type: message}))
+
+
+def _parse_question_form():
+    topic_id = int(request.form.get("topic_id", "0"))
+    text_en = request.form.get("text_en", "").strip()
+    text_ru = request.form.get("text_ru", "").strip()
+    if not text_en and not text_ru:
+        raise ValueError("Provide the question in at least one language.")
+
+    try:
+        correct_index = int(request.form.get("correct_option", "-1"))
+    except ValueError as error:
+        raise ValueError("Select the correct answer.") from error
+
+    options = []
+    for index in range(6):
+        option_en = request.form.get(f"option_en_{index}", "").strip()
+        option_ru = request.form.get(f"option_ru_{index}", "").strip()
+        if not option_en and not option_ru:
+            continue
+        options.append({
+            "text_en": option_en,
+            "text_ru": option_ru,
+            "is_correct": index == correct_index,
+        })
+    if len(options) < 2:
+        raise ValueError("Provide at least two answer options.")
+    if not any(option["is_correct"] for option in options):
+        raise ValueError("Select the correct answer from a non-empty option.")
+
+    difficulty = request.form.get("difficulty", "beginner")
+    if difficulty not in DIFFICULTIES:
+        difficulty = "beginner"
+    return {
+        "topic_id": topic_id,
+        "text_en": text_en,
+        "text_ru": text_ru,
+        "options": options,
+        "explanation_en": request.form.get("explanation_en", "").strip(),
+        "explanation_ru": request.form.get("explanation_ru", "").strip(),
+        "difficulty": difficulty,
+    }
+
+
+def _serialize_admin_question(row):
+    if row is None:
+        return None
+    question = dict(row)
+    question["options"] = json.loads(question.pop("options_json"))
+    question["is_active"] = bool(question["is_active"])
+    return question
 
 
 def register_admin_routes(app):
@@ -20,59 +88,172 @@ def register_admin_routes(app):
     @admin_required
     def admin_panel():
         user = fetch_user_by_id(session["user_id"])
-        documents = fetch_documents()
-        users = fetch_users()
+        edit_question_id = request.args.get("edit_question", type=int)
+        edit_question = fetch_question(edit_question_id) if edit_question_id else None
         return render_template(
             "admin.html",
             current_user=serialize_user(user),
-            documents=[serialize_document(d) for d in documents],
-            users=[dict(u) for u in users],
+            catalog=fetch_catalog(active_only=False),
+            questions=[
+                _serialize_admin_question(row) for row in fetch_questions_for_admin()
+            ],
+            edit_question=_serialize_admin_question(edit_question),
+            users=[dict(row) for row in fetch_users()],
             error=request.args.get("error"),
             success=request.args.get("success"),
         )
 
-    @app.route("/admin/documents", methods=["POST"], endpoint="admin_upload_document")
+    @app.route("/admin/courses", methods=["POST"], endpoint="admin_create_course")
     @admin_required
-    def admin_upload_document():
-        title = request.form.get("title", "").strip()
-        file = request.files.get("file")
-        if not file or not file.filename:
-            return redirect(url_for("admin_panel", error="Файл не выбран"))
-        filename = file.filename.lower()
-        if not filename.endswith((".pdf", ".docx", ".json")):
-            return redirect(url_for("admin_panel", error="Поддерживаются только PDF, DOCX и JSON"))
+    def admin_create_course():
+        title_en = request.form.get("title_en", "").strip()
+        title_ru = request.form.get("title_ru", "").strip()
+        if not title_en or not title_ru:
+            return _redirect_with("error", "Course names are required in English and Russian.")
+        create_course(title_en, title_ru)
+        return _redirect_with("success", "Course created.")
+
+    @app.route("/admin/topics", methods=["POST"], endpoint="admin_create_topic")
+    @admin_required
+    def admin_create_topic():
         try:
-            questions = parse_uploaded_file(filename, file)
-        except ValueError as e:
-            return redirect(url_for("admin_panel", error=str(e)))
-        except BadZipFile:
-            return redirect(url_for("admin_panel", error="DOCX файл поврежден или имеет неверный формат"))
-        except KeyError:
-            return redirect(url_for("admin_panel", error="Не удалось прочитать структуру DOCX"))
-        except Exception:
-            return redirect(url_for("admin_panel", error="Не удалось прочитать файл"))
-        if not questions:
-            return redirect(url_for("admin_panel", error="Не удалось распознать вопросы"))
-        doc_title = title or file.filename
-        save_document(doc_title, json.dumps(questions), session["user_id"])
-        return redirect(url_for("admin_panel", success=f"Загружено: {doc_title}"))
+            course_id = int(request.form.get("course_id", "0"))
+            sort_order = int(request.form.get("sort_order", "0"))
+        except ValueError:
+            return _redirect_with("error", "Invalid course or sort order.")
+        title_en = request.form.get("title_en", "").strip()
+        title_ru = request.form.get("title_ru", "").strip()
+        if not course_id or not title_en or not title_ru:
+            return _redirect_with("error", "Choose a course and provide both topic names.")
+        create_topic(
+            course_id,
+            title_en,
+            title_ru,
+            request.form.get("description_en", ""),
+            request.form.get("description_ru", ""),
+            sort_order,
+        )
+        return _redirect_with("success", "Topic created.")
 
-    @app.route("/admin/documents/<int:document_id>/delete", methods=["POST"], endpoint="admin_delete_document")
+    @app.route("/admin/questions", methods=["POST"], endpoint="admin_create_question")
     @admin_required
-    def admin_delete_document(document_id):
-        delete_document(document_id)
-        return redirect(url_for("admin_panel", success="Документ удалён"))
+    def admin_create_question():
+        try:
+            payload = _parse_question_form()
+            create_question(**payload)
+        except (TypeError, ValueError) as error:
+            return _redirect_with("error", str(error))
+        return _redirect_with("success", "Question added to the bank.")
 
-    @app.route("/admin/users/<int:user_id>/toggle-admin", methods=["POST"], endpoint="admin_toggle_user")
+    @app.route(
+        "/admin/questions/<int:question_id>",
+        methods=["POST"],
+        endpoint="admin_update_question",
+    )
+    @admin_required
+    def admin_update_question(question_id):
+        try:
+            payload = _parse_question_form()
+            update_question(question_id=question_id, **payload)
+        except (TypeError, ValueError) as error:
+            return _redirect_with("error", str(error))
+        return _redirect_with("success", "Question updated.")
+
+    @app.route(
+        "/admin/questions/<int:question_id>/toggle",
+        methods=["POST"],
+        endpoint="admin_toggle_question",
+    )
+    @admin_required
+    def admin_toggle_question(question_id):
+        toggle_question(question_id)
+        return _redirect_with("success", "Question availability updated.")
+
+    @app.route(
+        "/admin/questions/<int:question_id>/delete",
+        methods=["POST"],
+        endpoint="admin_delete_question",
+    )
+    @admin_required
+    def admin_delete_question(question_id):
+        delete_question(question_id)
+        return _redirect_with("success", "Question deleted.")
+
+    @app.route("/admin/import", methods=["POST"], endpoint="admin_import_questions")
+    @admin_required
+    def admin_import_questions():
+        file = request.files.get("file")
+        language = request.form.get("language", "en")
+        try:
+            topic_id = int(request.form.get("topic_id", "0"))
+        except ValueError:
+            topic_id = 0
+        if not topic_id or language not in {"en", "ru"}:
+            return _redirect_with("error", "Choose a topic and import language.")
+        if not file or not file.filename:
+            return _redirect_with("error", "Choose a PDF, DOCX, or JSON file.")
+        if not file.filename.lower().endswith((".pdf", ".docx", ".json")):
+            return _redirect_with("error", "Only PDF, DOCX, and JSON are supported.")
+        try:
+            imported = parse_uploaded_file(file.filename, file)
+        except (ValueError, BadZipFile, KeyError) as error:
+            return _redirect_with("error", str(error))
+        except Exception:
+            app.logger.exception("Question import failed")
+            return _redirect_with("error", "The file could not be processed.")
+        imported_count = 0
+        skipped_count = 0
+        for question in imported:
+            options = [
+                {
+                    f"text_{language}": option.get("text", ""),
+                    f"text_{'ru' if language == 'en' else 'en'}": "",
+                    "is_correct": bool(option.get("is_correct")),
+                }
+                for option in question.get("options", [])
+            ]
+            if len(options) < 2 or not any(option["is_correct"] for option in options):
+                skipped_count += 1
+                continue
+            create_question(
+                topic_id=topic_id,
+                text_en=question.get("text", "") if language == "en" else "",
+                text_ru=question.get("text", "") if language == "ru" else "",
+                options=options,
+                explanation_en=question.get("answer_hint", "") if language == "en" else "",
+                explanation_ru=question.get("answer_hint", "") if language == "ru" else "",
+            )
+            imported_count += 1
+        if not imported_count:
+            return _redirect_with(
+                "error",
+                "No questions with a valid answer key were found in the file.",
+            )
+        message = f"Imported {imported_count} questions."
+        if skipped_count:
+            message += f" Skipped {skipped_count} without a valid answer key."
+        return _redirect_with("success", message)
+
+    @app.route(
+        "/admin/users/<int:user_id>/toggle-admin",
+        methods=["POST"],
+        endpoint="admin_toggle_user",
+    )
     @admin_required
     def admin_toggle_user(user_id):
+        if user_id == session["user_id"]:
+            return _redirect_with("error", "You cannot change your own role.")
         toggle_user_admin(user_id)
-        return redirect(url_for("admin_panel"))
+        return _redirect_with("success", "User role updated.")
 
-    @app.route("/admin/users/<int:user_id>/delete", methods=["POST"], endpoint="admin_delete_user")
+    @app.route(
+        "/admin/users/<int:user_id>/delete",
+        methods=["POST"],
+        endpoint="admin_delete_user",
+    )
     @admin_required
     def admin_delete_user(user_id):
         if user_id == session["user_id"]:
-            return redirect(url_for("admin_panel", error="Нельзя удалить свой аккаунт"))
+            return _redirect_with("error", "You cannot delete your own account.")
         delete_user(user_id)
-        return redirect(url_for("admin_panel", success="Пользователь удалён"))
+        return _redirect_with("success", "User deleted.")

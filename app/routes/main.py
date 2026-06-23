@@ -1,6 +1,6 @@
 from flask import redirect, render_template, session, url_for
 
-from app.models.document import fetch_documents, serialize_document
+from app.models.knowledge import fetch_catalog
 from app.models.result import build_attempt_review, fetch_result_for_user, fetch_results_for_user, serialize_result
 from app.models.user import fetch_user_by_id, serialize_user
 from app.utils import login_required
@@ -12,11 +12,10 @@ def register_main_routes(app):
         user = None
         if "user_id" in session:
             user = fetch_user_by_id(session["user_id"])
-        documents = fetch_documents()
         return render_template(
             "index.html",
             current_user=serialize_user(user) if user else None,
-            documents=[serialize_document(d) for d in documents],
+            catalog=fetch_catalog(),
         )
 
     @app.route("/profile", endpoint="profile")

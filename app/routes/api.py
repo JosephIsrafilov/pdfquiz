@@ -4,6 +4,7 @@ from zipfile import BadZipFile
 from flask import jsonify, request, session
 
 from app.models.document import fetch_document
+from app.models.quiz import check_quiz_question, create_quiz, submit_quiz
 from app.models.result import fetch_results_for_user, save_result, serialize_result
 from app.models.user import fetch_user_by_id
 from app.utils import login_required
@@ -21,6 +22,85 @@ def register_api_routes(app):
         except Exception as exc:
             db_status = f"error: {exc}"
         return jsonify({"status": "ok", "db": db_status})
+
+    @app.route("/api/quizzes", methods=["POST"], endpoint="create_topic_quiz")
+    def create_topic_quiz():
+        payload = request.get_json(silent=True) or {}
+        topic_ids = payload.get("topic_ids")
+        if not isinstance(topic_ids, list) or not topic_ids:
+            return jsonify({"error": "Select at least one topic."}), 400
+        try:
+            quiz = create_quiz(
+                topic_ids=topic_ids,
+                count=int(payload.get("count", 10)),
+                language=str(payload.get("language", "en")),
+                difficulty=str(payload.get("difficulty", "all")),
+                user_id=session.get("user_id"),
+            )
+        except (TypeError, ValueError) as error:
+            return jsonify({"error": str(error)}), 400
+        return jsonify(quiz), 201
+
+    @app.route(
+        "/api/quizzes/<token>/check",
+        methods=["POST"],
+        endpoint="check_topic_quiz_question",
+    )
+    def check_topic_quiz_question(token):
+        payload = request.get_json(silent=True) or {}
+        try:
+            result = check_quiz_question(
+                token=token,
+                question_id=int(payload.get("question_id")),
+                selected=payload.get("selected"),
+                user_id=session.get("user_id"),
+            )
+        except PermissionError as error:
+            return jsonify({"error": str(error)}), 403
+        except (TypeError, ValueError) as error:
+            return jsonify({"error": str(error)}), 400
+        return jsonify(result)
+
+    @app.route(
+        "/api/quizzes/<token>/submit",
+        methods=["POST"],
+        endpoint="submit_topic_quiz",
+    )
+    def submit_topic_quiz(token):
+        payload = request.get_json(silent=True) or {}
+        answers = payload.get("answers", {})
+        if not isinstance(answers, dict):
+            return jsonify({"error": "Answers must be an object."}), 400
+        try:
+            result = submit_quiz(token, answers, session.get("user_id"))
+        except PermissionError as error:
+            return jsonify({"error": str(error)}), 403
+        except ValueError as error:
+            return jsonify({"error": str(error)}), 400
+
+        saved_result = None
+        if session.get("user_id"):
+            mistake_numbers = [
+                index
+                for index, item in enumerate(result["review"], start=1)
+                if not item["is_correct"]
+            ]
+            save_result(
+                user_id=session["user_id"],
+                document_id=None,
+                source_label=result["source_label"],
+                total_questions=result["total"],
+                quiz_size=result["total"],
+                graded=result["total"],
+                correct=result["correct"],
+                unanswered=result["unanswered"],
+                missing_answer_key=0,
+                mistake_numbers=mistake_numbers,
+                attempt_payload=result["review"],
+            )
+            latest = fetch_results_for_user(session["user_id"], limit=1)
+            saved_result = serialize_result(latest[0]) if latest else None
+        return jsonify({"result": result, "saved_result": saved_result})
 
     @app.route("/api/parse", methods=["POST"], endpoint="parse_document")
     def parse_document():

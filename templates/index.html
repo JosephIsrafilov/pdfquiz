@@ -1,25 +1,19 @@
 <!doctype html>
-<html lang="ru">
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>PDF / DOCX Quiz</title>
+    <title>Knowledge Check</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=Sora:wght@400;500;600;700&display=swap"
-      rel="stylesheet"
-    />
-    <link
-      rel="stylesheet"
-      href="{{ url_for('static', filename='styles.css') }}"
-    />
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=Sora:wght@500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}" />
     <meta name="csrf-token" content="{{ csrf_token() }}" />
     <script>
-      (function(){
-        var saved = localStorage.getItem('theme');
-        if (saved === 'dark') document.documentElement.classList.add('dark-init');
-        else if (saved === 'light') document.documentElement.classList.add('light-init');
+      (function () {
+        var saved = localStorage.getItem("theme");
+        if (saved === "dark") document.documentElement.classList.add("dark-init");
+        else if (saved === "light") document.documentElement.classList.add("light-init");
       })();
     </script>
   </head>
@@ -27,215 +21,159 @@
     <div class="app">
       <header class="topbar">
         <a class="brand" href="{{ url_for('index') }}">
-          <span class="brand-mark">Q</span>
-          <span>PDF / DOCX Quiz</span>
+          <span class="brand-mark">K</span>
+          <span>Knowledge Check</span>
         </a>
         <div class="topbar-actions">
-          <button id="themeToggle" class="theme-toggle" type="button" aria-label="Переключить тему">🌙</button>
+          <div class="language-switch" aria-label="Language">
+            <button class="language-button" type="button" data-language="en">EN</button>
+            <button class="language-button" type="button" data-language="ru">RU</button>
+          </div>
+          <button class="theme-toggle" type="button" data-i18n-aria="theme">Theme</button>
           {% if current_user %}
-          <a class="button" href="{{ url_for('profile') }}">Профиль</a>
+          <a class="button" href="{{ url_for('profile') }}" data-i18n="profile">Profile</a>
           <span class="user-pill">
             {{ current_user.username }}
-            {% if current_user.is_admin %}
-            <strong>admin</strong>
-            {% endif %}
+            {% if current_user.is_admin %}<strong>admin</strong>{% endif %}
           </span>
           {% if current_user.is_admin %}
-          <a class="button" href="{{ url_for('admin_panel') }}">Админ-панель</a>
+          <a class="button" href="{{ url_for('admin_panel') }}" data-i18n="admin">Teacher panel</a>
           {% endif %}
           <form method="post" action="{{ url_for('logout') }}">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
-            <button class="button" type="submit">Выйти</button>
+            <button class="button" type="submit" data-i18n="logout">Log out</button>
           </form>
           {% else %}
-          <a class="button" href="{{ url_for('login') }}">Войти</a>
-          <a class="button button--primary" href="{{ url_for('register') }}">Регистрация</a>
+          <a class="button" href="{{ url_for('login') }}" data-i18n="login">Log in</a>
+          <a class="button button--primary" href="{{ url_for('register') }}" data-i18n="register">Register</a>
           {% endif %}
         </div>
       </header>
 
-      <header class="hero">
+      <header class="hero knowledge-hero">
         <div class="hero-main">
-          <p class="eyebrow">PDF • DOCX • Пробники</p>
-          <h1>Пробники из PDF и Word</h1>
-          <p class="subtitle">
-            Загрузи файл или выбери готовый документ, задай диапазон и проходи
-            пробник с проверкой ошибок и сохранением результатов.
+          <p class="eyebrow" data-i18n="eyebrow">SELF-PACED IT PRACTICE</p>
+          <h1 data-i18n="heroTitle">Build a test from the topics you studied</h1>
+          <p class="subtitle" data-i18n="heroSubtitle">
+            Select a course and one or more topics. Questions are balanced across your selection and checked securely.
+          </p>
+          <p class="curriculum-source">
+            <span data-i18n="curriculumSource">Core topic sequence aligned with</span>
+            <a href="https://www.w3schools.com/python/" target="_blank" rel="noopener">W3Schools Python</a>.
           </p>
         </div>
-        <div class="hero-notes">
-          <div class="note">
-            <span>1</span>
-            Загрузка PDF или DOCX или выбор готового документа из базы.
-          </div>
-          <div class="note">
-            <span>2</span>
-            Размер пробника и режим проверки можно настраивать.
-          </div>
-          <div class="note">
-            <span>3</span>
-            Для зарегистрированных пользователей сохраняются результаты и ошибки.
-          </div>
+        <div class="hero-metric">
+          <span class="hero-metric__value" id="catalogQuestionCount">0</span>
+          <span data-i18n="availableQuestions">available questions</span>
         </div>
       </header>
 
-      <section class="panel controls">
-        <div class="control-row">
-          <div class="source-box">
-            <label class="control-label" for="documentSelect">Готовый документ</label>
-            <select id="documentSelect" class="select-input">
-              <option value="">Выбрать из базы</option>
-              {% for document in documents %}
-              <option value="{{ document.id }}">
-                {{ document.title }} ({{ document.question_count }} вопросов)
-              </option>
-              {% endfor %}
-            </select>
-            <div class="hint">
-              Если выбрать документ из базы, файл загружать не нужно.
+      <main>
+        <section class="panel quiz-builder" id="quizBuilder">
+          <div class="section-head section-head--row">
+            <div>
+              <p class="step-label" data-i18n="stepOne">STEP 1</p>
+              <h2 data-i18n="chooseCourse">Choose a course</h2>
             </div>
+            <div class="selection-summary" id="selectionSummary"></div>
           </div>
+          <div id="courseList" class="course-list"></div>
 
-          <div class="file-box">
-            <input
-              id="fileInput"
-              type="file"
-              accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-            />
-            <div class="file-details">
-              <span class="file-title">Локальный файл</span>
-              <span id="fileName" class="file-name">Файл не выбран</span>
+          <div class="section-head topic-heading">
+            <p class="step-label" data-i18n="stepTwo">STEP 2</p>
+            <h2 data-i18n="chooseTopics">Choose topics</h2>
+            <p data-i18n="chooseTopicsHint">Select one or several topics. The test will distribute questions as evenly as possible.</p>
+          </div>
+          <div id="topicList" class="topic-groups"></div>
+
+          <div class="section-head setup-heading">
+            <p class="step-label" data-i18n="stepThree">STEP 3</p>
+            <h2 data-i18n="configureTest">Configure your test</h2>
+          </div>
+          <div class="knowledge-controls">
+            <div>
+              <label class="control-label" for="quizSize" data-i18n="questionCount">Question count</label>
+              <input id="quizSize" class="number-input" type="number" min="1" max="100" value="10" />
+              <div class="quiz-size-presets">
+                <button type="button" data-quiz-size="5">5</button>
+                <button type="button" data-quiz-size="10">10</button>
+                <button type="button" data-quiz-size="15">15</button>
+                <button type="button" data-quiz-size="20">20</button>
+              </div>
+              <div id="availabilityHint" class="hint"></div>
             </div>
-            <label for="fileInput" class="button button--primary">Выбрать файл</label>
-          </div>
-
-          <div class="stat-box">
-            <div class="stat">
-              <span class="stat-label">Найдено вопросов</span>
-              <span id="questionCount" class="stat-value">0</span>
+            <div>
+              <label class="control-label" for="difficulty" data-i18n="difficulty">Difficulty</label>
+              <select id="difficulty" class="select-input">
+                <option value="all" data-i18n="allLevels">All levels</option>
+                <option value="beginner" data-i18n="beginner">Beginner</option>
+                <option value="intermediate" data-i18n="intermediate">Intermediate</option>
+                <option value="advanced" data-i18n="advanced">Advanced</option>
+              </select>
             </div>
-            <div class="stat">
-              <span class="stat-label">Источник</span>
-              <span id="sourceLabel" class="stat-value stat-value--small">—</span>
-            </div>
-          </div>
-        </div>
-
-        <div class="link-row">
-          <span class="control-label">Публичная ссылка</span>
-          <div class="link-box">
-            <span id="publicLink" class="link-value">—</span>
-            <button id="copyLink" class="button" type="button">Копировать</button>
-          </div>
-        </div>
-
-        <div class="control-grid">
-          <div>
-            <label class="control-label" for="fontSize">Размер текста</label>
-            <div class="font-tools">
+            <div>
+              <label class="control-label" for="fontSize" data-i18n="textSize">Text size</label>
               <div class="range-box">
-                <input
-                  id="fontSize"
-                  type="range"
-                  min="90"
-                  max="150"
-                  step="5"
-                  value="100"
-                />
+                <input id="fontSize" type="range" min="90" max="140" step="5" value="100" />
                 <span id="fontSizeValue">100%</span>
               </div>
-              <div class="font-presets">
-                <button class="chip-button" type="button" data-font-size="95">S</button>
-                <button class="chip-button" type="button" data-font-size="110">M</button>
-                <button class="chip-button" type="button" data-font-size="125">L</button>
-              </div>
+            </div>
+            <div>
+              <label class="control-label" for="instantCheck" data-i18n="checkingMode">Checking mode</label>
+              <label class="toggle-card" for="instantCheck">
+                <input id="instantCheck" type="checkbox" />
+                <span class="toggle-switch"></span>
+                <span class="toggle-copy">
+                  <strong data-i18n="instantCheck">Check each question</strong>
+                  <small data-i18n="instantCheckHint">Show feedback before final submission.</small>
+                </span>
+              </label>
             </div>
           </div>
-
-          <div>
-            <label class="control-label">Диапазон вопросов</label>
-            <div class="range-inputs">
-              <input id="rangeStart" type="number" min="1" value="1" />
-              <span>—</span>
-              <input id="rangeEnd" type="number" min="1" value="1" />
-            </div>
-            <div id="rangeHint" class="hint">
-              Сначала выбери файл или готовый документ.
-            </div>
-            <div id="rangeWarning" class="warning"></div>
-          </div>
-
-          <div>
-            <label class="control-label" for="quizSize">Сколько вопросов в пробнике</label>
-            <input id="quizSize" class="number-input" type="number" min="1" value="1" />
-            <div id="quizSizeHint" class="hint">
-              Количество можно задать вручную в пределах выбранного диапазона.
-            </div>
-          </div>
-
-          <div>
-            <label class="control-label" for="instantCheck">Режим проверки</label>
-            <label class="toggle-card" for="instantCheck">
-              <input id="instantCheck" type="checkbox" />
-              <span class="toggle-switch"></span>
-              <span class="toggle-copy">
-                <strong>Проверять по одному</strong>
-                <small>Добавляет кнопку проверки у каждого вопроса.</small>
-              </span>
-            </label>
-          </div>
-
-          <div class="button-stack">
-            <button id="generateBtn" class="button button--primary" type="button" disabled>
-              Сформировать пробник
-            </button>
-            <button id="checkBtn" class="button" type="button" disabled>
-              Проверить результат
-            </button>
-          </div>
-        </div>
-      </section>
-
-      <section class="panel">
-        <div id="summaryBox" class="results-summary hidden"></div>
-        <div id="mistakeNav" class="mistake-nav hidden"></div>
-        <div id="quizArea" class="quiz-area"></div>
-        <div id="quizEmpty" class="empty-state">
-          Выбери готовый документ или загрузи PDF / DOCX, затем сформируй пробник.
-        </div>
-        <div class="bottom-actions">
-          <button id="checkBtnBottom" class="button button--primary" type="button" disabled>
-            Проверить результат
+          <div id="builderError" class="form-alert hidden"></div>
+          <button id="generateBtn" class="button button--primary builder-submit" type="button" disabled data-i18n="startTest">
+            Start knowledge check
           </button>
-        </div>
-      </section>
+        </section>
+
+        <section class="panel quiz-stage">
+          <div id="quizHeader" class="quiz-session-head hidden">
+            <div>
+              <p class="step-label" data-i18n="yourTest">YOUR TEST</p>
+              <h2 id="quizTitle"></h2>
+            </div>
+            <div id="quizProgress" class="quiz-progress"></div>
+          </div>
+          <div id="summaryBox" class="results-summary hidden"></div>
+          <div id="topicResults" class="topic-results hidden"></div>
+          <div id="mistakeNav" class="mistake-nav hidden"></div>
+          <div id="quizArea" class="quiz-area"></div>
+          <div id="quizEmpty" class="empty-state" data-i18n="emptyQuiz">
+            Select your topics and start a knowledge check.
+          </div>
+          <div class="bottom-actions">
+            <button id="checkBtnBottom" class="button button--primary" type="button" disabled data-i18n="submitTest">
+              Submit test
+            </button>
+          </div>
+        </section>
+      </main>
     </div>
 
     <div id="loadingOverlay" class="overlay hidden">
       <div class="loader-card">
-        <div id="loadingSpinner" class="spinner"></div>
+        <div class="spinner"></div>
         <div>
-          <div class="loader-title">Обрабатываем вопросы</div>
-          <div class="loader-subtitle">Это может занять несколько секунд</div>
-          <div id="uploadProgressWrap" class="upload-progress-wrap hidden">
-            <div id="uploadProgressBar" class="upload-progress-bar" style="width:0%"></div>
-          </div>
-          <div id="uploadProgressText" class="upload-progress-text hidden">0%</div>
+          <div class="loader-title" data-i18n="buildingTest">Building your test</div>
+          <div class="loader-subtitle" data-i18n="buildingTestHint">Balancing questions across the selected topics.</div>
         </div>
       </div>
-    </div>
-
-    <div id="highlightMenu" class="hl-menu hidden">
-      <button data-color="#fde047" type="button">Подсветить желтым</button>
-      <button data-color="#fca5a5" type="button">Подсветить красным</button>
-      <button data-clear="true" type="button">Очистить подсветку</button>
     </div>
 
     <script>
       window.APP_BOOTSTRAP = {
         currentUser: {{ current_user|tojson }},
-        documents: {{ documents|tojson }},
-        results: []
+        catalog: {{ catalog|tojson }}
       };
     </script>
     <script src="{{ url_for('static', filename='app.js') }}"></script>

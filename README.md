@@ -1,67 +1,90 @@
-# PDF / DOCX Quiz Generator
+# Knowledge Check
 
-Веб-сайт для генерации пробников из `PDF` и `DOCX`.
+A bilingual English/Russian knowledge-check platform for IT courses.
 
-Репозиторий:
-`https://github.com/JosephIsrafilov/pdfquiz`
+Students select a course, choose the topics they have studied, configure the
+question count and difficulty, and complete a randomized test. Questions are
+balanced across the selected topics and graded on the server.
 
-Основной формат проекта: веб-версия на Python/Flask.
+## Features
 
-## Что умеет
+- English and Russian student interface
+- Courses and topic-based question banks
+- Balanced random tests across multiple topics
+- Beginner, intermediate, and advanced difficulty levels
+- Instant per-question checking or final submission
+- Server-side answer keys and grading
+- Explanations and topic-level score breakdowns
+- Saved attempt history for registered students
+- Teacher panel for courses, topics, questions, users, and imports
+- PDF, DOCX, and JSON import into a selected topic
+- Built-in Python curriculum with 40 topics and 140 bilingual questions
+- Detailed teaching feedback after every checked answer
 
-- загружать `PDF` и `DOCX` с вопросами
-- выбирать диапазон и размер пробника
-- включать режим проверки по одному вопросу
-- сохранять результаты зарегистрированных пользователей
-- открывать историю попыток в профиле
-- заранее загружать документы через админ-панель
+The foundation topic order follows the core language path in the
+[W3Schools Python tutorial](https://www.w3schools.com/python/), reorganized
+into progressive stages for younger learners. A separate deep-dive stage adds
+mutability, comprehensions, built-ins, function design, advanced OOP,
+dataclasses and typing, context managers, testing, algorithms, and async
+programming. Questions and explanations are original project content.
 
-## Веб-деплой
+The first application user becomes an administrator.
 
-Рекомендуемая схема:
-
-- Wispbyte для запуска сайта
-- Supabase Postgres для базы данных
-- переменная `DATABASE_URL` для подключения сайта к базе
-
-Команда запуска:
-
-```bash
-pip install -r requirements.txt && python main.py
-```
-
-Подробности для Wispbyte: `WISPBYTE_DEPLOY.md`.
-
-## Локальная проверка веб-сайта
+## Run locally
 
 ```bash
 pip install -r requirements.txt
 python main.py
 ```
 
-Открой `http://127.0.0.1:5000`.
+Open `http://127.0.0.1:5000`.
 
-## Формат файлов
+SQLite is used by default. Set `DATABASE_URL` to use PostgreSQL.
 
-- `PDF`: вопросы должны начинаться с номера, например `1.` или `1)`
-- варианты ответа могут начинаться с буквы, цифры или bullet-маркера
-- отмеченные ответы вроде `*` или `✓` поддерживаются
-- `DOCX` поддерживает формат, где неправильные ответы идут bullet-списком, а правильный ответ идет обычным абзацем без bullet
+## Teacher workflow
 
-## Большие PDF
+1. Open the teacher panel.
+2. Create a course and its topics.
+3. Add bilingual questions manually, including answer options, the correct
+   answer, explanation, and difficulty.
+4. Alternatively, import a PDF, DOCX, or JSON file into a selected topic and
+   source language.
+5. Translate imported questions through the question editor when required.
+6. Disable a question to remove it from new tests without deleting it.
 
-Если большой `PDF` долго обрабатывается на сервере, подготовь JSON локально:
+Imported questions without a valid answer key are skipped because they cannot
+be graded safely.
+
+## Import format
+
+The legacy question JSON format remains supported:
+
+```json
+[
+  {
+    "text": "What does input() return?",
+    "options": [
+      {"text": "A string", "is_correct": true},
+      {"text": "An integer", "is_correct": false}
+    ],
+    "answer_hint": "input() returns text as a string."
+  }
+]
+```
+
+Choose the destination topic and whether the file content is English or
+Russian before importing it.
+
+For large PDFs, prepare JSON locally:
 
 ```bash
 python prepare_questions_json.py "path/to/file.pdf"
 ```
 
-Потом загрузи получившийся `.questions.json` через админ-панель.
+## Deployment
 
-Если PDF уже содержит отметку правильного ответа отдельной строкой `•`, используй:
+Render is configured to run the modular application:
 
 ```bash
-python prepare_marked_pdf_json.py "path/to/marked.pdf"
+gunicorn main:app --bind 0.0.0.0:$PORT --workers 1 --timeout 180
 ```
-
-Такой JSON сохранит правильные ответы и тоже загружается через админ-панель.

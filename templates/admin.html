@@ -1,95 +1,164 @@
 <!doctype html>
-<html lang="ru">
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Админ-панель</title>
+    <title>Teacher panel · Knowledge Check</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=Sora:wght@400;600;700&display=swap"
-      rel="stylesheet"
-    />
-    <link
-      rel="stylesheet"
-      href="{{ url_for('static', filename='styles.css') }}"
-    />
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=Sora:wght@500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}" />
     <meta name="csrf-token" content="{{ csrf_token() }}" />
   </head>
   <body>
     <div class="app">
       <header class="topbar">
         <a class="brand" href="{{ url_for('index') }}">
-          <span class="brand-mark">Q</span>
-          <span>PDF / DOCX Quiz</span>
+          <span class="brand-mark">K</span>
+          <span>Knowledge Check</span>
         </a>
         <div class="topbar-actions">
-          <button id="themeToggle" class="theme-toggle" type="button" aria-label="Переключить тему">🌙</button>
           <span class="user-pill">{{ current_user.username }} <strong>admin</strong></span>
-          <a class="button" href="{{ url_for('index') }}">На сайт</a>
+          <a class="button" href="{{ url_for('index') }}">Student view</a>
           <form method="post" action="{{ url_for('logout') }}">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
-            <button class="button" type="submit">Выйти</button>
+            <button class="button" type="submit">Log out</button>
           </form>
         </div>
       </header>
 
-      <section class="panel">
+      <section class="panel" id="question-editor">
         <div class="section-head">
-          <h1>Админ-панель</h1>
-          <p>Здесь можно заранее загружать документы и управлять пользователями.</p>
+          <p class="step-label">TEACHER WORKSPACE</p>
+          <h1>Question bank</h1>
+          <p>Create the course structure first, then add bilingual questions or import existing material into a topic.</p>
         </div>
-        {% if error %}
-        <div class="form-alert">{{ error }}</div>
-        {% endif %}
-        {% if success %}
-        <div class="form-success">{{ success }}</div>
-        {% endif %}
+        {% if error %}<div class="form-alert">{{ error }}</div>{% endif %}
+        {% if success %}<div class="form-success">{{ success }}</div>{% endif %}
+      </section>
+
+      <section class="panel admin-grid">
+        <div class="admin-column">
+          <div class="section-head"><h2>New course</h2></div>
+          <form class="admin-form admin-form--plain" method="post" action="{{ url_for('admin_create_course') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+            <label class="control-label">English name</label>
+            <input class="text-input" name="title_en" required placeholder="Web Development" />
+            <label class="control-label">Russian name</label>
+            <input class="text-input" name="title_ru" required placeholder="Веб-разработка" />
+            <button class="button button--primary" type="submit">Create course</button>
+          </form>
+        </div>
+
+        <div class="admin-column">
+          <div class="section-head"><h2>New topic</h2></div>
+          <form class="admin-form admin-form--plain" method="post" action="{{ url_for('admin_create_topic') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+            <label class="control-label">Course</label>
+            <select class="select-input" name="course_id" required>
+              {% for course in catalog %}<option value="{{ course.id }}">{{ course.title_en }}</option>{% endfor %}
+            </select>
+            <div class="bilingual-grid">
+              <div><label class="control-label">English name</label><input class="text-input" name="title_en" required /></div>
+              <div><label class="control-label">Russian name</label><input class="text-input" name="title_ru" required /></div>
+              <div><label class="control-label">English description</label><textarea class="text-input" name="description_en"></textarea></div>
+              <div><label class="control-label">Russian description</label><textarea class="text-input" name="description_ru"></textarea></div>
+            </div>
+            <label class="control-label">Sort order</label>
+            <input class="number-input" name="sort_order" type="number" value="0" />
+            <button class="button button--primary" type="submit">Create topic</button>
+          </form>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="section-head section-head--row">
+          <div>
+            <p class="step-label">{% if edit_question %}EDIT QUESTION{% else %}NEW QUESTION{% endif %}</p>
+            <h2>{% if edit_question %}Update question #{{ edit_question.id }}{% else %}Add to the question bank{% endif %}</h2>
+          </div>
+          {% if edit_question %}<a class="button" href="{{ url_for('admin_panel') }}">Cancel editing</a>{% endif %}
+        </div>
+        {% set q = edit_question or {} %}
+        <form class="question-editor" method="post" action="{% if edit_question %}{{ url_for('admin_update_question', question_id=edit_question.id) }}{% else %}{{ url_for('admin_create_question') }}{% endif %}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+          <div class="editor-row">
+            <div>
+              <label class="control-label">Topic</label>
+              <select class="select-input" name="topic_id" required>
+                {% for course in catalog %}
+                  <optgroup label="{{ course.title_en }}">
+                    {% for topic in course.topics %}
+                    <option value="{{ topic.id }}" {% if q and q.topic_id == topic.id %}selected{% endif %}>{{ topic.title_en }} / {{ topic.title_ru }}</option>
+                    {% endfor %}
+                  </optgroup>
+                {% endfor %}
+              </select>
+            </div>
+            <div>
+              <label class="control-label">Difficulty</label>
+              <select class="select-input" name="difficulty">
+                {% for level in ['beginner', 'intermediate', 'advanced'] %}
+                <option value="{{ level }}" {% if q and q.difficulty == level %}selected{% endif %}>{{ level|title }}</option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
+          <div class="bilingual-grid">
+            <div><label class="control-label">Question · English</label><textarea class="text-input editor-textarea" name="text_en">{{ q.text_en or '' }}</textarea></div>
+            <div><label class="control-label">Question · Russian</label><textarea class="text-input editor-textarea" name="text_ru">{{ q.text_ru or '' }}</textarea></div>
+          </div>
+          <div class="option-editor">
+            <div class="option-editor__head"><strong>Answer options</strong><span>Select one correct row.</span></div>
+            {% for index in range(6) %}
+              {% set option = q.options[index] if q.options and index < q.options|length else {} %}
+              <div class="option-editor__row">
+                <input type="radio" name="correct_option" value="{{ index }}" {% if option and option.is_correct %}checked{% endif %} aria-label="Correct option" />
+                <span class="option-label">{{ 'ABCDEF'[index] }}</span>
+                <input class="text-input" name="option_en_{{ index }}" value="{{ option.text_en or '' }}" placeholder="English option" />
+                <input class="text-input" name="option_ru_{{ index }}" value="{{ option.text_ru or '' }}" placeholder="Russian option" />
+              </div>
+            {% endfor %}
+          </div>
+          <div class="bilingual-grid">
+            <div><label class="control-label">Explanation · English</label><textarea class="text-input" name="explanation_en">{{ q.explanation_en or '' }}</textarea></div>
+            <div><label class="control-label">Explanation · Russian</label><textarea class="text-input" name="explanation_ru">{{ q.explanation_ru or '' }}</textarea></div>
+          </div>
+          <button class="button button--primary" type="submit">{% if edit_question %}Save changes{% else %}Add question{% endif %}</button>
+        </form>
       </section>
 
       <section class="panel admin-grid">
         <div class="admin-column">
           <div class="section-head">
-            <h2>Загрузить документ</h2>
-            <p>PDF и DOCX будут разобраны, а JSON можно импортировать уже готовым.</p>
+            <h2>Import questions</h2>
+            <p>Imported questions are assigned to one topic and one source language. You can translate them later.</p>
           </div>
-          <form method="post" action="{{ url_for('admin_upload_document') }}" enctype="multipart/form-data" class="admin-form">
+          <form class="admin-form admin-form--plain" method="post" action="{{ url_for('admin_import_questions') }}" enctype="multipart/form-data">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
-            <label class="control-label" for="title">Название</label>
-            <input id="title" name="title" class="text-input" type="text" placeholder="Например, Международный менеджмент" />
-            <label class="control-label" for="file">Файл</label>
-            <input id="file" name="file" class="text-input text-input--file" type="file" accept=".pdf,.docx,.json" required />
-            <button class="button button--primary" type="submit">Загрузить в базу</button>
+            <label class="control-label">Destination topic</label>
+            <select class="select-input" name="topic_id" required>
+              {% for course in catalog %}{% for topic in course.topics %}
+              <option value="{{ topic.id }}">{{ course.title_en }} · {{ topic.title_en }}</option>
+              {% endfor %}{% endfor %}
+            </select>
+            <label class="control-label">Content language</label>
+            <select class="select-input" name="language"><option value="en">English</option><option value="ru">Russian</option></select>
+            <label class="control-label">PDF, DOCX, or JSON</label>
+            <input class="text-input text-input--file" name="file" type="file" accept=".pdf,.docx,.json" required />
+            <button class="button button--primary" type="submit">Import into topic</button>
           </form>
-          <div class="hint">
-            Для больших PDF лучше сначала подготовить JSON локально и загрузить уже его.
-          </div>
         </div>
-
         <div class="admin-column">
-          <div class="section-head">
-            <h2>Документы</h2>
-            <p>Удаление документа удалит и связанные результаты по нему.</p>
-          </div>
-          <div class="admin-list">
-            {% for document in documents %}
-            <article class="admin-item">
-              <div>
-                <div class="admin-item__title">{{ document.title }}</div>
-                <div class="admin-item__meta">
-                  {{ document.question_count }} вопросов
-                  {% if document.uploader_name %}
-                  • загрузил {{ document.uploader_name }}
-                  {% endif %}
-                </div>
-              </div>
-              <form method="post" action="{{ url_for('admin_delete_document', document_id=document.id) }}">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
-                <button class="button button--danger" type="submit">Удалить</button>
-              </form>
-            </article>
-            {% else %}
-            <div class="empty-state">Пока нет загруженных документов.</div>
+          <div class="section-head"><h2>Catalog overview</h2></div>
+          <div class="catalog-overview">
+            {% for course in catalog %}
+            <div class="catalog-course">
+              <strong>{{ course.title_en }} / {{ course.title_ru }}</strong>
+              {% for topic in course.topics %}
+              <span>{{ topic.title_en }} <b>{{ topic.question_count }}</b></span>
+              {% endfor %}
+            </div>
             {% endfor %}
           </div>
         </div>
@@ -97,36 +166,50 @@
 
       <section class="panel">
         <div class="section-head">
-          <h2>Пользователи</h2>
-          <p>Можно менять роль и удалять аккаунты.</p>
+          <h2>Questions</h2>
+          <p>{{ questions|length }} questions currently in the bank.</p>
         </div>
-        <div class="admin-list">
-          {% for user in users %}
-          <article class="admin-item">
+        <div class="question-bank-list">
+          {% for question in questions %}
+          <article class="bank-question {% if not question.is_active %}bank-question--inactive{% endif %}">
             <div>
-              <div class="admin-item__title">
-                {{ user.username }}
-                {% if user.is_admin %}
-                <span class="badge">admin</span>
-                {% endif %}
-              </div>
-              <div class="admin-item__meta">Создан: {{ user.created_at }}</div>
+              <div class="bank-question__meta">{{ question.course_title_en }} · {{ question.topic_title_en }} · {{ question.difficulty }}</div>
+              <strong>{{ question.text_en or question.text_ru }}</strong>
+              <small>{{ question.text_ru if question.text_en else '' }}</small>
             </div>
             <div class="admin-actions">
-              <form method="post" action="{{ url_for('admin_toggle_user', user_id=user.id) }}">
+              <a class="button" href="{{ url_for('admin_panel', edit_question=question.id) }}#question-editor">Edit</a>
+              <form method="post" action="{{ url_for('admin_toggle_question', question_id=question.id) }}">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
-                <button class="button" type="submit">
-                  {% if user.is_admin %}Снять админа{% else %}Сделать админом{% endif %}
-                </button>
+                <button class="button" type="submit">{% if question.is_active %}Disable{% else %}Enable{% endif %}</button>
               </form>
-              <form method="post" action="{{ url_for('admin_delete_user', user_id=user.id) }}">
+              <form method="post" action="{{ url_for('admin_delete_question', question_id=question.id) }}">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
-                <button class="button button--danger" type="submit">Удалить</button>
+                <button class="button button--danger" type="submit">Delete</button>
               </form>
             </div>
           </article>
-          {% else %}
-          <div class="empty-state">Пользователей пока нет.</div>
+          {% else %}<div class="empty-state">No questions yet.</div>{% endfor %}
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="section-head"><h2>Users</h2></div>
+        <div class="admin-list">
+          {% for user in users %}
+          <article class="admin-item">
+            <div><strong>{{ user.username }}</strong>{% if user.is_admin %} <span class="badge">admin</span>{% endif %}</div>
+            <div class="admin-actions">
+              <form method="post" action="{{ url_for('admin_toggle_user', user_id=user.id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+                <button class="button" type="submit">Change role</button>
+              </form>
+              <form method="post" action="{{ url_for('admin_delete_user', user_id=user.id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+                <button class="button button--danger" type="submit">Delete</button>
+              </form>
+            </div>
+          </article>
           {% endfor %}
         </div>
       </section>

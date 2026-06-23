@@ -3,6 +3,7 @@ Integration tests for Flask routes: auth, main, admin, API.
 """
 
 import json
+import io
 import pytest
 
 
@@ -86,6 +87,88 @@ def test_logout_redirects_to_login(client):
 def test_index_loads(client):
     resp = client.get("/")
     assert resp.status_code == 200
+    assert b"Knowledge Check" in resp.data
+
+
+def test_topic_quiz_hides_answers_and_grades_on_server(client):
+    from app.models.knowledge import fetch_catalog
+
+    catalog = fetch_catalog()
+    topic_ids = [topic["id"] for topic in catalog[0]["topics"][:2]]
+    resp = client.post(
+        "/api/quizzes",
+        json={
+            "topic_ids": topic_ids,
+            "count": 4,
+            "language": "en",
+            "difficulty": "all",
+        },
+    )
+    assert resp.status_code == 201
+    quiz = resp.get_json()
+    assert len(quiz["questions"]) == 4
+    assert all(
+        "is_correct" not in option
+        for question in quiz["questions"]
+        for option in question["options"]
+    )
+
+    answers = {str(question["id"]): 0 for question in quiz["questions"]}
+    submitted = client.post(
+        f"/api/quizzes/{quiz['token']}/submit",
+        json={"answers": answers},
+    )
+    assert submitted.status_code == 200
+    result = submitted.get_json()["result"]
+    assert result["total"] == 4
+    assert len(result["review"]) == 4
+    assert all(item["correct_answers"] for item in result["review"])
+    assert all("Concept:" in item["explanation"] for item in result["review"])
+    assert all("Common trap:" in item["explanation"] for item in result["review"])
+
+
+def test_topic_quiz_rejects_unavailable_count(client):
+    from app.models.knowledge import fetch_catalog
+
+    topic_id = fetch_catalog()[0]["topics"][0]["id"]
+    resp = client.post(
+        "/api/quizzes",
+        json={
+            "topic_ids": [topic_id],
+            "count": 100,
+            "language": "ru",
+            "difficulty": "all",
+        },
+    )
+    assert resp.status_code == 400
+
+
+def test_python_curriculum_has_complete_difficulty_coverage(client):
+    from app.models.knowledge import fetch_catalog
+
+    python_course = next(
+        course for course in fetch_catalog() if course["title_en"] == "Python"
+    )
+    assert len(python_course["topics"]) >= 40
+    assert python_course["question_count"] >= 140
+    for topic in python_course["topics"]:
+        assert topic["beginner_count"] >= 1
+        assert topic["intermediate_count"] >= 1
+        assert topic["advanced_count"] >= 1
+
+
+def test_python_curriculum_sync_is_idempotent(client):
+    from app.models.knowledge import fetch_catalog, synchronize_python_curriculum
+
+    before = next(
+        course for course in fetch_catalog() if course["title_en"] == "Python"
+    )
+    synchronize_python_curriculum()
+    after = next(
+        course for course in fetch_catalog() if course["title_en"] == "Python"
+    )
+    assert after["topic_count"] == before["topic_count"]
+    assert after["question_count"] == before["question_count"]
 
 
 def test_profile_requires_login(client):
@@ -146,7 +229,7 @@ def test_api_parse_json_questions(client):
         }
     ]
     json_bytes = json.dumps(questions).encode("utf-8")
-    data = {"file": (json_bytes, "questions.json", "application/json")}
+    data = {"file": (io.BytesIO(json_bytes), "questions.json", "application/json")}
     resp = client.post("/api/parse", data=data, content_type="multipart/form-data")
     assert resp.status_code == 200
     result = resp.get_json()
@@ -155,7 +238,7 @@ def test_api_parse_json_questions(client):
 
 
 def test_api_parse_unsupported_extension(client):
-    data = {"file": (b"text content", "file.txt", "text/plain")}
+    data = {"file": (io.BytesIO(b"text content"), "file.txt", "text/plain")}
     resp = client.post("/api/parse", data=data, content_type="multipart/form-data")
     assert resp.status_code == 400
 

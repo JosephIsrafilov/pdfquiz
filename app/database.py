@@ -96,8 +96,59 @@ def init_db():
                     created_at TIMESTAMP DEFAULT NOW()
                 )
             """)
+            connection.execute("""
+                CREATE TABLE IF NOT EXISTS courses (
+                    id SERIAL PRIMARY KEY,
+                    title_en TEXT NOT NULL,
+                    title_ru TEXT NOT NULL,
+                    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+                    created_at TIMESTAMP DEFAULT NOW()
+                )
+            """)
+            connection.execute("""
+                CREATE TABLE IF NOT EXISTS topics (
+                    id SERIAL PRIMARY KEY,
+                    course_id INTEGER NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+                    title_en TEXT NOT NULL,
+                    title_ru TEXT NOT NULL,
+                    description_en TEXT,
+                    description_ru TEXT,
+                    sort_order INTEGER NOT NULL DEFAULT 0,
+                    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+                    created_at TIMESTAMP DEFAULT NOW()
+                )
+            """)
+            connection.execute("""
+                CREATE TABLE IF NOT EXISTS questions (
+                    id SERIAL PRIMARY KEY,
+                    topic_id INTEGER NOT NULL REFERENCES topics(id) ON DELETE CASCADE,
+                    text_en TEXT,
+                    text_ru TEXT,
+                    options_json TEXT NOT NULL,
+                    explanation_en TEXT,
+                    explanation_ru TEXT,
+                    difficulty TEXT NOT NULL DEFAULT 'beginner',
+                    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+                    created_at TIMESTAMP DEFAULT NOW()
+                )
+            """)
+            connection.execute("""
+                CREATE TABLE IF NOT EXISTS quiz_sessions (
+                    id SERIAL PRIMARY KEY,
+                    token TEXT UNIQUE NOT NULL,
+                    user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+                    language TEXT NOT NULL,
+                    question_order_json TEXT NOT NULL,
+                    option_orders_json TEXT NOT NULL,
+                    topic_ids_json TEXT NOT NULL,
+                    completed BOOLEAN NOT NULL DEFAULT FALSE,
+                    created_at TIMESTAMP DEFAULT NOW()
+                )
+            """)
             try:
                 connection.execute("ALTER TABLE results ADD COLUMN IF NOT EXISTS attempt_json TEXT")
+                connection.execute("ALTER TABLE topics ADD COLUMN IF NOT EXISTS curriculum_key TEXT")
+                connection.execute("ALTER TABLE questions ADD COLUMN IF NOT EXISTS curriculum_key TEXT")
             except Exception:
                 pass
         else:
@@ -136,8 +187,65 @@ def init_db():
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """)
+            connection.execute("""
+                CREATE TABLE IF NOT EXISTS courses (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    title_en TEXT NOT NULL,
+                    title_ru TEXT NOT NULL,
+                    is_active INTEGER NOT NULL DEFAULT 1,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            connection.execute("""
+                CREATE TABLE IF NOT EXISTS topics (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    course_id INTEGER NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+                    title_en TEXT NOT NULL,
+                    title_ru TEXT NOT NULL,
+                    description_en TEXT,
+                    description_ru TEXT,
+                    sort_order INTEGER NOT NULL DEFAULT 0,
+                    is_active INTEGER NOT NULL DEFAULT 1,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            connection.execute("""
+                CREATE TABLE IF NOT EXISTS questions (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    topic_id INTEGER NOT NULL REFERENCES topics(id) ON DELETE CASCADE,
+                    text_en TEXT,
+                    text_ru TEXT,
+                    options_json TEXT NOT NULL,
+                    explanation_en TEXT,
+                    explanation_ru TEXT,
+                    difficulty TEXT NOT NULL DEFAULT 'beginner',
+                    is_active INTEGER NOT NULL DEFAULT 1,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            connection.execute("""
+                CREATE TABLE IF NOT EXISTS quiz_sessions (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    token TEXT UNIQUE NOT NULL,
+                    user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+                    language TEXT NOT NULL,
+                    question_order_json TEXT NOT NULL,
+                    option_orders_json TEXT NOT NULL,
+                    topic_ids_json TEXT NOT NULL,
+                    completed INTEGER NOT NULL DEFAULT 0,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
             try:
                 connection.execute("ALTER TABLE results ADD COLUMN attempt_json TEXT")
+            except Exception:
+                pass
+            try:
+                connection.execute("ALTER TABLE topics ADD COLUMN curriculum_key TEXT")
+            except Exception:
+                pass
+            try:
+                connection.execute("ALTER TABLE questions ADD COLUMN curriculum_key TEXT")
             except Exception:
                 pass
         connection.commit()

@@ -77,6 +77,7 @@ def serialize_result(result):
         "mistake_numbers": json.loads(result["mistake_numbers"] or "[]"),
         "created_at": str(result["created_at"]),
         "document_id": result["document_id"],
+        "attempt_available": bool(result["attempt_json"]),
     }
 
 
@@ -85,14 +86,44 @@ def build_attempt_review(result):
     if not attempt_json:
         return []
     attempt = json.loads(attempt_json)
+    if isinstance(attempt, dict):
+        quiz = attempt.get("quiz", [])
+        answers = attempt.get("answers", {})
+        attempt = []
+        for index, question in enumerate(quiz):
+            chosen = answers.get(str(index), answers.get(index))
+            attempt.append({
+                "number": question.get("number"),
+                "text": question.get("text"),
+                "options": question.get("options", []),
+                "chosen": chosen,
+            })
     review = []
-    for item in attempt:
+    for index, item in enumerate(attempt, start=1):
+        options = []
+        chosen = item.get("selected", item.get("chosen"))
+        for option_index, option in enumerate(item.get("options", [])):
+            is_correct = bool(option.get("is_correct"))
+            is_selected = bool(option.get("is_selected")) or chosen == option_index
+            options.append({
+                "label": chr(65 + option_index),
+                "text": option.get("text", ""),
+                "is_correct": is_correct,
+                "is_selected": is_selected,
+                "is_wrong_selected": is_selected and not is_correct,
+            })
         review.append({
+            "index": index,
             "number": item.get("number"),
             "text": item.get("text"),
-            "options": item.get("options", []),
-            "chosen": item.get("chosen"),
-            "correct": item.get("correct"),
-            "is_correct": item.get("is_correct"),
+            "topic": item.get("topic"),
+            "explanation": item.get("explanation"),
+            "selected_answer": item.get("selected_answer"),
+            "correct_answers": item.get("correct_answers", []),
+            "options": options,
+            "chosen": chosen,
+            "correct": item.get("correct_options", item.get("correct")),
+            "is_correct": bool(item.get("is_correct")),
+            "is_unanswered": bool(item.get("is_unanswered", chosen is None)),
         })
     return review

@@ -3,11 +3,14 @@ Shared pytest fixtures for the PDF/DOCX Quiz test suite.
 """
 
 import os
+import tempfile
 import pytest
 
 # Tell the app to use an in-memory SQLite DB so tests don't touch app.db
 os.environ.setdefault("DATABASE_URL", "")
-os.environ.setdefault("DB_PATH", ":memory:")
+_test_db = tempfile.NamedTemporaryFile(prefix="knowledge-check-tests-", suffix=".db", delete=False)
+_test_db.close()
+os.environ.setdefault("DB_PATH", _test_db.name)
 os.environ.setdefault("SECRET_KEY", "test-secret-key")
 
 
@@ -55,4 +58,3 @@ def client(app):
             return _client.get(*args, **kwargs)
 
     return CSRFClient()
-

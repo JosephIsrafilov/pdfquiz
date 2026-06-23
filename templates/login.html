@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="ru">
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Вход</title>
+    <title>Log in · Knowledge Check</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -20,28 +20,33 @@
     <div class="auth-layout">
       <div class="auth-card">
         <a class="brand brand--auth" href="{{ url_for('index') }}">
-          <span class="brand-mark">Q</span>
-          <span>PDF / DOCX Quiz</span>
+          <span class="brand-mark">K</span>
+          <span>Knowledge Check</span>
         </a>
-        <h1>Вход</h1>
-        <p class="subtitle">Войди, чтобы сохранять результаты и видеть свои ошибки позже.</p>
+        <div class="language-switch auth-language">
+          <button class="language-button" type="button" data-language="en">EN</button>
+          <button class="language-button" type="button" data-language="ru">RU</button>
+        </div>
+        <h1 data-en="Log in" data-ru="Вход">Log in</h1>
+        <p class="subtitle" data-en="Log in to save results and review your mistakes later." data-ru="Войдите, чтобы сохранять результаты и позже разбирать ошибки.">Log in to save results and review your mistakes later.</p>
         {% if error %}
         <div class="form-alert">{{ error }}</div>
         {% endif %}
         <form method="post" class="auth-form">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
           <input type="hidden" name="next" value="{{ next_url }}" />
-          <label class="control-label" for="username">Логин</label>
+          <label class="control-label" for="username" data-en="Username" data-ru="Логин">Username</label>
           <input id="username" name="username" class="text-input" type="text" required />
-          <label class="control-label" for="password">Пароль</label>
+          <label class="control-label" for="password" data-en="Password" data-ru="Пароль">Password</label>
           <input id="password" name="password" class="text-input" type="password" required />
-          <button class="button button--primary" type="submit">Войти</button>
+          <button class="button button--primary" type="submit" data-en="Log in" data-ru="Войти">Log in</button>
         </form>
         <div class="auth-links">
-          Нет аккаунта?
-          <a href="{{ url_for('register', next=next_url) }}">Зарегистрироваться</a>
+          <span data-en="No account yet?" data-ru="Нет аккаунта?">No account yet?</span>
+          <a href="{{ url_for('register', next=next_url) }}" data-en="Register" data-ru="Зарегистрироваться">Register</a>
         </div>
       </div>
     </div>
+    <script src="{{ url_for('static', filename='page-i18n.js') }}"></script>
   </body>
 </html>
