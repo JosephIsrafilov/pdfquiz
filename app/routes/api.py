@@ -41,6 +41,23 @@ def register_api_routes(app):
             return jsonify({"error": str(error)}), 400
         return jsonify(quiz), 201
 
+    @app.route("/api/quizzes/room", methods=["POST"], endpoint="create_room_quiz")
+    def create_room_quiz():
+        payload = request.get_json(silent=True) or {}
+        code = payload.get("code")
+        if not code:
+            return jsonify({"error": "Room code is required."}), 400
+        try:
+            from app.models.quiz import create_quiz_from_room
+            quiz = create_quiz_from_room(
+                code=code,
+                language=str(payload.get("language", "en")),
+                user_id=session.get("user_id"),
+            )
+        except ValueError as error:
+            return jsonify({"error": str(error)}), 400
+        return jsonify(quiz), 201
+
     @app.route(
         "/api/quizzes/<token>/check",
         methods=["POST"],
@@ -97,6 +114,7 @@ def register_api_routes(app):
                 missing_answer_key=0,
                 mistake_numbers=mistake_numbers,
                 attempt_payload=result["review"],
+                room_id=result.get("room_id"),
             )
             latest = fetch_results_for_user(session["user_id"], limit=1)
             saved_result = serialize_result(latest[0]) if latest else None

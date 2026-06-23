@@ -145,10 +145,48 @@ def init_db():
                     created_at TIMESTAMP DEFAULT NOW()
                 )
             """)
+            connection.execute("""
+                CREATE TABLE IF NOT EXISTS groups (
+                    id SERIAL PRIMARY KEY,
+                    name TEXT NOT NULL,
+                    code TEXT UNIQUE NOT NULL,
+                    created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+                    created_at TIMESTAMP DEFAULT NOW()
+                )
+            """)
+            connection.execute("""
+                CREATE TABLE IF NOT EXISTS group_members (
+                    id SERIAL PRIMARY KEY,
+                    group_id INTEGER NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
+                    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                    joined_at TIMESTAMP DEFAULT NOW(),
+                    UNIQUE(group_id, user_id)
+                )
+            """)
+            connection.execute("""
+                CREATE TABLE IF NOT EXISTS rooms (
+                    id SERIAL PRIMARY KEY,
+                    code TEXT UNIQUE NOT NULL,
+                    title TEXT NOT NULL,
+                    created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+                    topic_ids_json TEXT NOT NULL,
+                    difficulty TEXT,
+                    question_count INTEGER,
+                    time_limit_minutes INTEGER,
+                    max_attempts INTEGER,
+                    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+                    created_at TIMESTAMP DEFAULT NOW(),
+                    expires_at TIMESTAMP
+                )
+            """)
             try:
                 connection.execute("ALTER TABLE results ADD COLUMN IF NOT EXISTS attempt_json TEXT")
                 connection.execute("ALTER TABLE topics ADD COLUMN IF NOT EXISTS curriculum_key TEXT")
                 connection.execute("ALTER TABLE questions ADD COLUMN IF NOT EXISTS curriculum_key TEXT")
+                connection.execute("ALTER TABLE questions ADD COLUMN IF NOT EXISTS option_rationales_json TEXT")
+                connection.execute("ALTER TABLE questions ADD COLUMN IF NOT EXISTS question_type TEXT NOT NULL DEFAULT 'mcq'")
+                connection.execute("ALTER TABLE quiz_sessions ADD COLUMN IF NOT EXISTS room_id INTEGER REFERENCES rooms(id) ON DELETE CASCADE")
+                connection.execute("ALTER TABLE results ADD COLUMN IF NOT EXISTS room_id INTEGER REFERENCES rooms(id) ON DELETE CASCADE")
             except Exception:
                 pass
         else:
@@ -236,6 +274,40 @@ def init_db():
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """)
+            connection.execute("""
+                CREATE TABLE IF NOT EXISTS groups (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT NOT NULL,
+                    code TEXT UNIQUE NOT NULL,
+                    created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            connection.execute("""
+                CREATE TABLE IF NOT EXISTS group_members (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    group_id INTEGER NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
+                    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                    joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(group_id, user_id)
+                )
+            """)
+            connection.execute("""
+                CREATE TABLE IF NOT EXISTS rooms (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    code TEXT UNIQUE NOT NULL,
+                    title TEXT NOT NULL,
+                    created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+                    topic_ids_json TEXT NOT NULL,
+                    difficulty TEXT,
+                    question_count INTEGER,
+                    time_limit_minutes INTEGER,
+                    max_attempts INTEGER,
+                    is_active INTEGER NOT NULL DEFAULT 1,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    expires_at TIMESTAMP
+                )
+            """)
             try:
                 connection.execute("ALTER TABLE results ADD COLUMN attempt_json TEXT")
             except Exception:
@@ -246,6 +318,22 @@ def init_db():
                 pass
             try:
                 connection.execute("ALTER TABLE questions ADD COLUMN curriculum_key TEXT")
+            except Exception:
+                pass
+            try:
+                connection.execute("ALTER TABLE questions ADD COLUMN option_rationales_json TEXT")
+            except Exception:
+                pass
+            try:
+                connection.execute("ALTER TABLE questions ADD COLUMN question_type TEXT NOT NULL DEFAULT 'mcq'")
+            except Exception:
+                pass
+            try:
+                connection.execute("ALTER TABLE quiz_sessions ADD COLUMN room_id INTEGER REFERENCES rooms(id) ON DELETE CASCADE")
+            except Exception:
+                pass
+            try:
+                connection.execute("ALTER TABLE results ADD COLUMN room_id INTEGER REFERENCES rooms(id) ON DELETE CASCADE")
             except Exception:
                 pass
         connection.commit()

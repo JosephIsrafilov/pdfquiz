@@ -6,7 +6,7 @@
     <title>Knowledge Check</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=Sora:wght@500;600;700&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}" />
     <meta name="csrf-token" content="{{ csrf_token() }}" />
     <script>
@@ -69,6 +69,18 @@
       </header>
 
       <main>
+        <section class="panel join-room" id="joinRoom" style="margin-bottom: 24px;">
+          <div class="section-head">
+            <h2 data-i18n="joinRoomTitle">Join a Teacher's Room</h2>
+            <p data-i18n="joinRoomDesc">If your teacher gave you a 6-digit code, enter it here to start your configured test.</p>
+          </div>
+          <form id="joinRoomForm" style="display: flex; gap: 12px; align-items: center; margin-top: 16px;">
+            <input id="roomCodeInput" class="text-input" placeholder="e.g. A7K3X2" required style="max-width: 200px; text-transform: uppercase;" />
+            <button class="button button--primary" type="submit" data-i18n="joinRoomBtn">Join Room</button>
+          </form>
+          <div id="joinRoomError" class="form-alert hidden" style="margin-top: 12px;"></div>
+        </section>
+
         <section class="panel quiz-builder" id="quizBuilder">
           <div class="section-head section-head--row">
             <div>
@@ -142,7 +154,10 @@
               <p class="step-label" data-i18n="yourTest">YOUR TEST</p>
               <h2 id="quizTitle"></h2>
             </div>
-            <div id="quizProgress" class="quiz-progress"></div>
+            <div style="display: flex; gap: 16px; align-items: center;">
+              <div id="quizTimer" class="hidden" style="font-weight: 600; font-family: monospace; font-size: 1.25rem;"></div>
+              <div id="quizProgress" class="quiz-progress"></div>
+            </div>
           </div>
           <div id="summaryBox" class="results-summary hidden"></div>
           <div id="topicResults" class="topic-results hidden"></div>

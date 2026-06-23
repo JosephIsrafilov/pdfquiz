@@ -1,79 +1,79 @@
 :root {
-  --bg: #ffffff;
+  --bg: #fafafa;
   --panel: #ffffff;
-  --ink: #0f172a;
-  --muted: #475569;
-  --accent: #111827;
-  --accent-2: #0f766e;
+  --ink: #111827;
+  --muted: #6b7280;
+  --accent: #000000;
+  --accent-2: #3b82f6;
   --accent-3: #1f2937;
   --danger: #ef4444;
   --danger-soft: #fef2f2;
   --ok: #22c55e;
   --ok-soft: #f0fdf4;
-  --line: #e2e8f0;
-  --shadow: 0 1px 0 rgba(15, 23, 42, 0.06);
-  --radius: 14px;
+  --line: #eaeaea;
+  --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+  --radius: 8px;
   --quiz-font-size: 1rem;
-  --surface: #f8fafc;
-  --surface-hover: #f1f5f9;
+  --surface: #fafafa;
+  --surface-hover: #f3f4f6;
 }
 
 /* ── Dark mode ─────────────────────────────────────────────────────────── */
 
 @media (prefers-color-scheme: dark) {
   :root:not(.light) {
-    --bg: #0f172a;
-    --panel: #1e293b;
-    --ink: #f1f5f9;
-    --muted: #94a3b8;
-    --accent: #e2e8f0;
-    --accent-2: #2dd4bf;
-    --accent-3: #cbd5e1;
-    --danger: #f87171;
+    --bg: #000000;
+    --panel: #0a0a0a;
+    --ink: #ededed;
+    --muted: #a1a1aa;
+    --accent: #ffffff;
+    --accent-2: #3b82f6;
+    --accent-3: #d4d4d8;
+    --danger: #ef4444;
     --danger-soft: #450a0a;
-    --ok: #4ade80;
+    --ok: #22c55e;
     --ok-soft: #052e16;
-    --line: #334155;
-    --shadow: 0 1px 0 rgba(0, 0, 0, 0.3);
-    --surface: #1e293b;
-    --surface-hover: #273548;
+    --line: #333333;
+    --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5);
+    --surface: #171717;
+    --surface-hover: #262626;
   }
 }
 
 body.dark {
-  --bg: #0f172a;
-  --panel: #1e293b;
-  --ink: #f1f5f9;
-  --muted: #94a3b8;
-  --accent: #e2e8f0;
-  --accent-2: #2dd4bf;
-  --accent-3: #cbd5e1;
-  --danger: #f87171;
+  --bg: #000000;
+  --panel: #0a0a0a;
+  --ink: #ededed;
+  --muted: #a1a1aa;
+  --accent: #ffffff;
+  --accent-2: #3b82f6;
+  --accent-3: #d4d4d8;
+  --danger: #ef4444;
   --danger-soft: #450a0a;
-  --ok: #4ade80;
+  --ok: #22c55e;
   --ok-soft: #052e16;
-  --line: #334155;
-  --shadow: 0 1px 0 rgba(0, 0, 0, 0.3);
-  --surface: #1e293b;
-  --surface-hover: #273548;
+  --line: #333333;
+  --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5);
+  --surface: #171717;
+  --surface-hover: #262626;
 }
 
 body.light {
-  --bg: #ffffff;
+  --bg: #fafafa;
   --panel: #ffffff;
-  --ink: #0f172a;
-  --muted: #475569;
-  --accent: #111827;
-  --accent-2: #0f766e;
+  --ink: #111827;
+  --muted: #6b7280;
+  --accent: #000000;
+  --accent-2: #3b82f6;
   --accent-3: #1f2937;
   --danger: #ef4444;
   --danger-soft: #fef2f2;
   --ok: #22c55e;
   --ok-soft: #f0fdf4;
-  --line: #e2e8f0;
-  --shadow: 0 1px 0 rgba(15, 23, 42, 0.06);
-  --surface: #f8fafc;
-  --surface-hover: #f1f5f9;
+  --line: #eaeaea;
+  --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+  --surface: #fafafa;
+  --surface-hover: #f3f4f6;
 }
 
 /* Dark mode theme toggle button */
@@ -106,11 +106,12 @@ body.light {
 
 body {
   margin: 0;
-  font-family: "IBM Plex Sans", sans-serif;
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   color: var(--ink);
   background: var(--bg);
   min-height: 100vh;
   overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
 }
 
 a {
@@ -124,7 +125,9 @@ h2,
 .stat-value,
 .question-title,
 .brand {
-  font-family: "Sora", sans-serif;
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  letter-spacing: -0.025em;
+  font-weight: 600;
 }
 
 .app {
@@ -289,7 +292,7 @@ h2,
 .admin-column {
   background: var(--panel);
   border: 1px solid var(--line);
-  border-radius: 14px;
+  border-radius: var(--radius);
 }
 
 .source-box,
@@ -400,11 +403,20 @@ h2,
 .number-input {
   width: 100%;
   padding: 10px 12px;
-  border-radius: 10px;
+  border-radius: 6px;
   border: 1px solid var(--line);
   background: var(--panel);
   font: inherit;
   color: var(--ink);
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.select-input:focus,
+.text-input:focus,
+.number-input:focus {
+  outline: none;
+  border-color: var(--muted);
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.05);
 }
 
 .text-input--file {
@@ -464,22 +476,21 @@ input[type="range"] {
 
 .button,
 .chip-button {
-  border: none;
-  padding: 12px 16px;
-  border-radius: 12px;
-  font-weight: 600;
+  border: 1px solid transparent;
+  padding: 10px 16px;
+  border-radius: 6px;
+  font-weight: 500;
   cursor: pointer;
   background: var(--surface);
   color: var(--ink);
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  transition: all 0.15s ease;
   font: inherit;
 }
 
 .button:hover,
 .chip-button:hover,
 .mistake-chip:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 10px 18px rgba(15, 23, 42, 0.12);
+  background: var(--surface-hover);
 }
 
 .button:disabled {
@@ -491,6 +502,12 @@ input[type="range"] {
 
 .button--primary {
   background: var(--accent);
+  color: var(--bg);
+  border: 1px solid transparent;
+}
+
+.button--primary:hover {
+  background: var(--accent-3);
   color: var(--bg);
 }
 
@@ -657,11 +674,11 @@ input[type="range"] {
 
 .question-card,
 .mistake-card {
-  padding: 18px;
-  border-radius: 16px;
+  padding: 24px;
+  border-radius: var(--radius);
   border: 1px solid var(--line);
   background: var(--panel);
-  box-shadow: 0 1px 0 rgba(15, 23, 42, 0.06);
+  box-shadow: var(--shadow);
   animation: rise 0.4s ease forwards;
 }
 
@@ -704,9 +721,14 @@ input[type="range"] {
   align-items: start;
   background: var(--panel);
   padding: 10px 12px;
-  border-radius: 12px;
+  border-radius: var(--radius);
   border: 1px solid var(--line);
   cursor: pointer;
+  transition: border-color 0.15s;
+}
+
+.option:hover {
+  border-color: var(--muted);
 }
 
 .option--correct {
@@ -798,6 +820,18 @@ input[type="range"] {
 
 .answer-tag--ok {
   color: #166534;
+}
+
+.option-rationale {
+  margin-top: 8px;
+  padding: 8px 12px;
+  background: var(--bg);
+  border-left: 2px solid var(--muted);
+  border-radius: 6px;
+  font-size: 0.9rem;
+  color: var(--muted);
+  line-height: 1.4;
+}
   border-color: #86efac;
   background: #dcfce7;
 }
@@ -1176,18 +1210,18 @@ main {
   gap: 13px;
   padding: 15px;
   border: 1px solid var(--line);
-  border-radius: 13px;
+  border-radius: var(--radius);
   background: var(--panel);
   color: var(--ink);
   text-align: left;
   cursor: pointer;
   font: inherit;
-  transition: border-color 0.15s, transform 0.15s, background 0.15s;
+  transition: border-color 0.15s, transform 0.15s, box-shadow 0.15s;
 }
 
 .course-card:hover {
-  transform: translateY(-2px);
   border-color: var(--muted);
+  box-shadow: var(--shadow);
 }
 
 .course-card.is-active {
@@ -1247,14 +1281,14 @@ main {
   min-height: 150px;
   padding: 18px;
   border: 1px solid var(--line);
-  border-radius: 13px;
+  border-radius: var(--radius);
   background: var(--surface);
   cursor: pointer;
   transition: border-color 0.15s, transform 0.15s, box-shadow 0.15s;
 }
 
 .topic-card:hover {
-  transform: translateY(-2px);
+  box-shadow: var(--shadow);
 }
 
 .topic-card.is-selected {

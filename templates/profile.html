@@ -7,13 +7,14 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=Sora:wght@400;500;600;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
     <link
       rel="stylesheet"
       href="{{ url_for('static', filename='styles.css') }}"
     />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   </head>
   <body>
     <div class="app">
@@ -52,6 +53,65 @@
       </section>
 
       <section class="panel">
+        <div class="section-head">
+          <h2 data-en="Mastery Stats" data-ru="Статистика">Mastery Stats</h2>
+          <p data-en="Your overall progress on the platform." data-ru="Ваш общий прогресс на платформе.">Your overall progress on the platform.</p>
+        </div>
+        <div class="stats-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 32px;">
+          <div class="stat-card" style="background: #f9fafb; padding: 24px; border-radius: 8px; border: 1px solid #e5e7eb; text-align: center;">
+            <div style="font-size: 2em; font-weight: 700; color: #111827;">{{ stats.total_tests }}</div>
+            <div style="color: #6b7280; font-size: 0.9em; font-weight: 500;" data-en="Tests Completed" data-ru="Пройдено тестов">Tests Completed</div>
+          </div>
+          <div class="stat-card" style="background: #f9fafb; padding: 24px; border-radius: 8px; border: 1px solid #e5e7eb; text-align: center;">
+            <div style="font-size: 2em; font-weight: 700; color: #111827;">{{ stats.total_questions }}</div>
+            <div style="color: #6b7280; font-size: 0.9em; font-weight: 500;" data-en="Questions Answered" data-ru="Вопросов решено">Questions Answered</div>
+          </div>
+          <div class="stat-card" style="background: #f9fafb; padding: 24px; border-radius: 8px; border: 1px solid #e5e7eb; text-align: center;">
+            <div style="font-size: 2em; font-weight: 700; color: #4f46e5;">{{ stats.average_score }}%</div>
+            <div style="color: #6b7280; font-size: 0.9em; font-weight: 500;" data-en="Average Score" data-ru="Средний балл">Average Score</div>
+          </div>
+        </div>
+
+        {% if stats.total_tests > 0 %}
+        <div style="width: 100%; max-width: 800px; margin: 0 auto 48px;">
+          <canvas id="progressChart" width="800" height="300"></canvas>
+        </div>
+        {% endif %}
+
+        {% if error %}<div class="form-alert">{{ error }}</div>{% endif %}
+        {% if success %}<div class="form-success">{{ success }}</div>{% endif %}
+
+        <div class="section-head" style="margin-top: 48px;">
+          <h2 data-en="My Groups" data-ru="Мои группы">My Groups</h2>
+          <p data-en="Join a group to connect your progress with your teacher." data-ru="Вступите в группу, чтобы преподаватель видел ваш прогресс.">Join a group to connect your progress with your teacher.</p>
+        </div>
+        <div class="stats-grid" style="display: grid; grid-template-columns: 1fr 2fr; gap: 32px; margin-bottom: 48px;">
+          <div style="background: #f9fafb; padding: 24px; border-radius: 8px; border: 1px solid #e5e7eb;">
+            <h3 style="margin-top: 0; margin-bottom: 16px; font-size: 1.1em;" data-en="Join Group" data-ru="Вступить в группу">Join Group</h3>
+            <form method="post" action="{{ url_for('profile_join_group') }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+              <input class="text-input" name="code" placeholder="6-digit code" required style="width: 100%; margin-bottom: 12px; font-family: monospace; text-transform: uppercase;" />
+              <button class="button button--primary" type="submit" style="width: 100%;" data-en="Join" data-ru="Присоединиться">Join</button>
+            </form>
+          </div>
+          <div>
+            {% if user_groups %}
+              <div class="admin-list">
+                {% for group in user_groups %}
+                <article class="admin-item" style="padding: 16px; border: 1px solid #e5e7eb; border-radius: 6px; margin-bottom: 8px;">
+                  <strong style="font-size: 1.1em; display: block; margin-bottom: 4px;">{{ group.name }}</strong>
+                  <div style="font-size: 0.9em; color: #6b7280;">Teacher: {{ group.teacher_name }} • Joined: {{ group.joined_at.split(' ')[0] if group.joined_at else 'N/A' }}</div>
+                </article>
+                {% endfor %}
+              </div>
+            {% else %}
+              <div class="empty-state" style="height: 100%; display: flex; align-items: center; justify-content: center;" data-en="You haven't joined any groups yet." data-ru="Вы еще не состоите ни в одной группе.">
+                You haven't joined any groups yet.
+              </div>
+            {% endif %}
+          </div>
+        </div>
+
         <div class="section-head">
           <h2 data-en="Attempt history" data-ru="История попыток">Attempt history</h2>
           <p data-en="The latest saved results for this account." data-ru="Последние сохраненные результаты этого аккаунта.">The latest saved results for this account.</p>
@@ -92,5 +152,54 @@
       </section>
     </div>
     <script src="{{ url_for('static', filename='page-i18n.js') }}"></script>
+    <script>
+      {% if stats.total_tests > 0 %}
+      document.addEventListener("DOMContentLoaded", function() {
+        const rawResults = {{ results_json|safe }};
+        // Reverse so chronological order (oldest first)
+        const chartData = [...rawResults].reverse();
+        
+        const labels = chartData.map(r => {
+          const d = new Date(r.created_at);
+          return d.toLocaleDateString();
+        });
+        
+        const scores = chartData.map(r => {
+          return r.graded > 0 ? Math.round((r.correct / r.graded) * 100) : 0;
+        });
+
+        const ctx = document.getElementById('progressChart').getContext('2d');
+        new Chart(ctx, {
+          type: 'line',
+          data: {
+            labels: labels,
+            datasets: [{
+              label: 'Score %',
+              data: scores,
+              borderColor: '#4f46e5',
+              backgroundColor: 'rgba(79, 70, 229, 0.1)',
+              borderWidth: 2,
+              fill: true,
+              tension: 0.3,
+              pointBackgroundColor: '#4f46e5',
+            }]
+          },
+          options: {
+            responsive: true,
+            scales: {
+              y: {
+                beginAtZero: true,
+                max: 100,
+                title: { display: true, text: 'Score %' }
+              }
+            },
+            plugins: {
+              legend: { display: false }
+            }
+          }
+        });
+      });
+      {% endif %}
+    </script>
   </body>
 </html>

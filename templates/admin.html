@@ -6,7 +6,7 @@
     <title>Teacher panel · Knowledge Check</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=Sora:wght@500;600;700&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}" />
     <meta name="csrf-token" content="{{ csrf_token() }}" />
   </head>
@@ -190,6 +190,120 @@
             </div>
           </article>
           {% else %}<div class="empty-state">No questions yet.</div>{% endfor %}
+        </div>
+      </section>
+
+      <section class="panel admin-grid">
+        <div class="admin-column">
+          <div class="section-head">
+            <h2>New Room (Teacher Codes)</h2>
+            <p>Create a pre-configured quiz and share the code with students.</p>
+          </div>
+          <form class="admin-form admin-form--plain" method="post" action="{{ url_for('admin_create_room') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+            
+            <label class="control-label">Room Title</label>
+            <input class="text-input" name="title" required placeholder="Saturday Python Class" />
+
+            <label class="control-label">Topics</label>
+            <select class="select-input" name="topic_ids" multiple required style="height: 120px;">
+              {% for course in catalog %}
+                <optgroup label="{{ course.title_en }}">
+                  {% for topic in course.topics %}
+                  <option value="{{ topic.id }}">{{ topic.title_en }}</option>
+                  {% endfor %}
+                </optgroup>
+              {% endfor %}
+            </select>
+            <small style="color: #6b7280; display: block; margin-bottom: 12px; margin-top: -8px;">Hold Ctrl/Cmd to select multiple.</small>
+
+            <div class="bilingual-grid">
+              <div>
+                <label class="control-label">Difficulty</label>
+                <select class="select-input" name="difficulty">
+                  <option value="any">Any (Mixed)</option>
+                  <option value="beginner">Beginner</option>
+                  <option value="intermediate">Intermediate</option>
+                  <option value="advanced">Advanced</option>
+                </select>
+              </div>
+              <div>
+                <label class="control-label">Questions</label>
+                <input class="number-input" name="question_count" type="number" value="10" min="1" max="100" style="width: 100%; box-sizing: border-box;" />
+              </div>
+              <div>
+                <label class="control-label">Time Limit (mins)</label>
+                <input class="number-input" name="time_limit" type="number" placeholder="Optional" style="width: 100%; box-sizing: border-box;" />
+              </div>
+              <div>
+                <label class="control-label">Max Attempts</label>
+                <input class="number-input" name="max_attempts" type="number" placeholder="Optional" style="width: 100%; box-sizing: border-box;" />
+              </div>
+            </div>
+
+            <button class="button button--primary" type="submit" style="margin-top: 16px;">Create room</button>
+          </form>
+        </div>
+
+        <div class="admin-column">
+          <div class="section-head"><h2>Active Rooms</h2></div>
+          <div class="admin-list">
+            {% for room in rooms %}
+            <article class="admin-item" style="display: flex; justify-content: space-between; align-items: flex-start; padding: 12px; border: 1px solid #e5e7eb; border-radius: 6px; margin-bottom: 8px;">
+              <div>
+                <strong style="font-size: 1.1em; display: inline-block; vertical-align: middle;">{{ room.title }}</strong>
+                <span style="font-family: monospace; background: #4f46e5; color: white; padding: 2px 6px; border-radius: 4px; margin-left: 8px; font-weight: bold; vertical-align: middle;">{{ room.code }}</span>
+                <div style="font-size: 0.9em; color: #6b7280; margin-top: 4px;">
+                  Created by {{ room.creator_name }} • {{ room.question_count }} Qs 
+                  {% if room.difficulty %}• {{ room.difficulty|title }}{% endif %}
+                </div>
+              </div>
+              <div class="admin-actions">
+                <a class="button" href="{{ url_for('admin_room_results', room_id=room.id) }}">Results</a>
+                <form method="post" action="{{ url_for('admin_toggle_room', room_id=room.id) }}" style="display: inline-block;">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+                  <button class="button" type="submit">{% if room.is_active %}Close room{% else %}Open room{% endif %}</button>
+                </form>
+              </div>
+            </article>
+            {% else %}
+              <div class="empty-state">No rooms created yet.</div>
+            {% endfor %}
+          </div>
+        </div>
+      </section>
+
+      <section class="panel admin-grid">
+        <div class="admin-column">
+          <div class="section-head">
+            <h2>New Student Group</h2>
+            <p>Create a class or group to organize students and track analytics.</p>
+          </div>
+          <form class="admin-form admin-form--plain" method="post" action="{{ url_for('admin_create_group') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+            <label class="control-label">Group Name</label>
+            <input class="text-input" name="name" required placeholder="Python 101 - Fall 2026" />
+            <button class="button button--primary" type="submit" style="margin-top: 16px;">Create group</button>
+          </form>
+        </div>
+
+        <div class="admin-column">
+          <div class="section-head"><h2>Active Groups</h2></div>
+          <div class="admin-list">
+            {% for group in groups %}
+            <article class="admin-item" style="display: flex; justify-content: space-between; align-items: flex-start; padding: 12px; border: 1px solid #e5e7eb; border-radius: 6px; margin-bottom: 8px;">
+              <div>
+                <strong style="font-size: 1.1em; display: inline-block; vertical-align: middle;">{{ group.name }}</strong>
+                <span style="font-family: monospace; background: #10b981; color: white; padding: 2px 6px; border-radius: 4px; margin-left: 8px; font-weight: bold; vertical-align: middle;">{{ group.code }}</span>
+                <div style="font-size: 0.9em; color: #6b7280; margin-top: 4px;">
+                  Created by {{ group.created_by_name }} • {{ group.member_count }} Students
+                </div>
+              </div>
+            </article>
+            {% else %}
+              <div class="empty-state">No groups created yet.</div>
+            {% endfor %}
+          </div>
         </div>
       </section>
 

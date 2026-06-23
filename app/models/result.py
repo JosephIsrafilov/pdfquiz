@@ -44,6 +44,7 @@ def save_result(
     missing_answer_key: int,
     mistake_numbers: List[int],
     attempt_payload,
+    room_id: Optional[int] = None,
 ):
     mistake_json = json.dumps(mistake_numbers)
     attempt_json = json.dumps(attempt_payload) if attempt_payload is not None else None
@@ -52,12 +53,12 @@ def save_result(
             INSERT INTO results (
                 user_id, document_id, source_label, total_questions, quiz_size,
                 graded, correct, unanswered, missing_answer_key,
-                mistake_numbers, attempt_json
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                mistake_numbers, attempt_json, room_id
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """, (
             user_id, document_id, source_label, total_questions, quiz_size,
             graded, correct, unanswered, missing_answer_key,
-            mistake_json, attempt_json,
+            mistake_json, attempt_json, room_id,
         ))
         connection.commit()
 
@@ -111,6 +112,7 @@ def build_attempt_review(result):
                 "is_correct": is_correct,
                 "is_selected": is_selected,
                 "is_wrong_selected": is_selected and not is_correct,
+                "rationale": option.get("rationale", ""),
             })
         review.append({
             "index": index,

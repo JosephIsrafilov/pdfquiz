@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Room Results - Knowledge Check</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}" />
+  </head>
+  <body>
+    <div class="app">
+      <header class="topbar">
+        <a class="brand" href="{{ url_for('index') }}">
+          <span class="brand-mark">K</span>
+          <span>Knowledge Check</span>
+        </a>
+        <div class="topbar-actions">
+          <a class="button" href="{{ url_for('admin_panel') }}">Back to Admin</a>
+          <form method="post" action="{{ url_for('logout') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+            <button class="button" type="submit">Log out</button>
+          </form>
+        </div>
+      </header>
+
+      <main class="profile-layout" style="max-width: 900px; margin: 40px auto; padding: 0 16px;">
+        <header class="profile-head">
+          <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+            <div>
+              <h1 style="font-family: var(--font-display); font-weight: 600; font-size: 2rem;">{{ room.title }}</h1>
+              <p class="subtitle" style="color: var(--text-muted); font-size: 1.1rem; margin-top: 8px;">
+                Code: <strong style="font-family: monospace; background: var(--bg-hover); padding: 4px 8px; border-radius: 4px; color: var(--text);">{{ room.code }}</strong>
+                • Created: {{ room.created_at }} 
+                • Questions: {{ room.question_count }}
+              </p>
+            </div>
+            
+            <form method="get" action="{{ url_for('admin_room_results', room_id=room.id) }}" style="display: flex; gap: 8px; align-items: center;">
+              <label style="font-weight: 500; font-size: 0.9em; color: var(--text-muted);">Filter by Group:</label>
+              <select name="group_id" class="select-input" onchange="this.form.submit()" style="padding: 6px 12px; font-size: 0.9em; height: auto;">
+                <option value="">All Students</option>
+                {% for group in groups %}
+                  <option value="{{ group.id }}" {% if current_group_id == group.id %}selected{% endif %}>{{ group.name }}</option>
+                {% endfor %}
+              </select>
+            </form>
+          </div>
+        </header>
+
+        {% if question_stats %}
+        <section class="panel">
+          <div class="section-head">
+            <h2>Question Statistics</h2>
+            <p>Difficulty breakdown for the filtered students.</p>
+          </div>
+          <div style="overflow-x: auto;">
+            <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.95rem;">
+              <thead>
+                <tr style="border-bottom: 2px solid var(--border);">
+                  <th style="padding: 12px; font-weight: 600; width: 60%;">Question Snippet</th>
+                  <th style="padding: 12px; font-weight: 600;">Attempts</th>
+                  <th style="padding: 12px; font-weight: 600;">Accuracy</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for qs in question_stats %}
+                <tr style="border-bottom: 1px solid var(--border);">
+                  <td style="padding: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 0;">
+                    {{ qs.text[:100] + '...' if qs.text|length > 100 else qs.text }}
+                  </td>
+                  <td style="padding: 12px; color: var(--text-muted);">{{ qs.total_attempts }}</td>
+                  <td style="padding: 12px;">
+                    {% if qs.accuracy >= 95 %}
+                      <span style="font-weight: 600; color: #059669; background: #d1fae5; padding: 2px 6px; border-radius: 4px; font-size: 0.85em;">{{ qs.accuracy | round | int }}% (Easy)</span>
+                    {% elif qs.accuracy <= 20 %}
+                      <span style="font-weight: 600; color: #dc2626; background: #fee2e2; padding: 2px 6px; border-radius: 4px; font-size: 0.85em;">{{ qs.accuracy | round | int }}% (Hard)</span>
+                    {% else %}
+                      <span style="font-weight: 600; color: #d97706;">{{ qs.accuracy | round | int }}%</span>
+                    {% endif %}
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </section>
+        {% endif %}
+
+        <section class="panel">
+          <div class="section-head">
+            <h2>Student Results</h2>
+            <p>All attempts by students in this room.</p>
+          </div>
+          
+          <div style="overflow-x: auto;">
+            <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.95rem;">
+              <thead>
+                <tr style="border-bottom: 2px solid var(--border);">
+                  <th style="padding: 12px; font-weight: 600;">Student</th>
+                  <th style="padding: 12px; font-weight: 600;">Score</th>
+                  <th style="padding: 12px; font-weight: 600;">Details</th>
+                  <th style="padding: 12px; font-weight: 600;">Date</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for r in results %}
+                <tr style="border-bottom: 1px solid var(--border);">
+                  <td style="padding: 12px;"><strong>{{ r.username or 'Anonymous' }}</strong></td>
+                  <td style="padding: 12px;">
+                    {% if r.total_questions > 0 %}
+                    <span style="font-weight: 600; {% if r.correct / r.total_questions >= 0.8 %}color: #059669;{% elif r.correct / r.total_questions >= 0.6 %}color: #d97706;{% else %}color: #dc2626;{% endif %}">
+                      {{ (r.correct / r.total_questions * 100) | round | int }}%
+                    </span>
+                    {% else %}
+                    0%
+                    {% endif %}
+                  </td>
+                  <td style="padding: 12px; color: var(--text-muted);">
+                    {{ r.correct }} / {{ r.total_questions }} correct
+                  </td>
+                  <td style="padding: 12px; color: var(--text-muted);">
+                    {{ r.created_at_str }}
+                  </td>
+                </tr>
+                {% else %}
+                <tr>
+                  <td colspan="4" style="padding: 24px 12px; text-align: center; color: var(--text-muted);">
+                    No results found for this room yet.
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </main>
+    </div>
+  </body>
+</html>

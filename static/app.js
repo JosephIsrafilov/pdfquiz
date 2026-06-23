@@ -69,6 +69,9 @@ const copy = {
     stageToolkit: "5 · Python toolkit",
     stageOop: "6 · OOP and files",
     stageDeep: "7 · Python deep dive",
+    joinRoomTitle: "Join a Teacher's Room",
+    joinRoomDesc: "If your teacher gave you a 6-digit code, enter it here to start your configured test.",
+    joinRoomBtn: "Join Room",
   },
   ru: {
     theme: "Сменить тему",
@@ -138,6 +141,9 @@ const copy = {
     stageToolkit: "5 · Инструменты Python",
     stageOop: "6 · ООП и файлы",
     stageDeep: "7 · Углублённый Python",
+    joinRoomTitle: "Присоединиться к комнате",
+    joinRoomDesc: "Если преподаватель дал вам 6-значный код, введите его здесь.",
+    joinRoomBtn: "Войти",
   },
 };
 
@@ -150,6 +156,8 @@ const state = {
   answers: {},
   checked: new Set(),
   submitted: false,
+  timerInterval: null,
+  timerRemaining: null,
 };
 
 const courseList = document.getElementById("courseList");
@@ -345,6 +353,52 @@ function resetQuiz() {
   topicResults.classList.add("hidden");
   mistakeNav.classList.add("hidden");
   submitButton.disabled = true;
+  clearQuizTimer();
+}
+
+function updateTimerDisplay() {
+  const min = Math.floor(state.timerRemaining / 60).toString().padStart(2, "0");
+  const sec = (state.timerRemaining % 60).toString().padStart(2, "0");
+  const timerEl = document.getElementById("quizTimer");
+  if (timerEl) {
+    timerEl.textContent = `${min}:${sec}`;
+    if (state.timerRemaining <= 60) {
+      timerEl.style.color = "var(--danger)";
+    } else {
+      timerEl.style.color = "var(--ink)";
+    }
+  }
+}
+
+function startQuizTimer(minutes) {
+  clearQuizTimer();
+  state.timerRemaining = minutes * 60;
+  
+  const timerEl = document.getElementById("quizTimer");
+  if (timerEl) {
+    timerEl.classList.remove("hidden");
+    timerEl.style.color = "var(--ink)";
+  }
+  
+  updateTimerDisplay();
+  
+  state.timerInterval = setInterval(() => {
+    state.timerRemaining -= 1;
+    updateTimerDisplay();
+    if (state.timerRemaining <= 0) {
+      clearQuizTimer();
+      submitQuiz(); // Auto submit
+    }
+  }, 1000);
+}
+
+function clearQuizTimer() {
+  if (state.timerInterval) {
+    clearInterval(state.timerInterval);
+    state.timerInterval = null;
+  }
+  const timerEl = document.getElementById("quizTimer");
+  if (timerEl) timerEl.classList.add("hidden");
 }
 
 function updateProgress() {
@@ -370,31 +424,105 @@ function renderQuestion(question, index) {
 
   const options = document.createElement("div");
   options.className = "options";
-  question.options.forEach((option, optionIndex) => {
-    const row = document.createElement("label");
-    row.className = "option";
-    row.dataset.option = optionIndex;
-    const radio = document.createElement("input");
-    radio.type = "radio";
-    radio.name = `question-${question.id}`;
-    radio.value = optionIndex;
-    radio.checked = state.answers[String(question.id)] === optionIndex;
-    radio.disabled = state.submitted;
-    radio.addEventListener("change", () => {
-      state.answers[String(question.id)] = optionIndex;
+  
+  const qType = question.question_type || "mcq";
+
+  if (qType === "mcq" || qType === "true_false") {
+    question.options.forEach((option, optionIndex) => {
+      const row = document.createElement("label");
+      row.className = "option";
+      row.dataset.option = optionIndex;
+      const radio = document.createElement("input");
+      radio.type = "radio";
+      radio.name = `question-${question.id}`;
+      radio.value = optionIndex;
+      radio.checked = state.answers[String(question.id)] === optionIndex;
+      radio.disabled = state.submitted;
+      radio.addEventListener("change", () => {
+        state.answers[String(question.id)] = optionIndex;
+        clearFeedback(card);
+        state.checked.delete(question.id);
+        updateProgress();
+      });
+      const marker = document.createElement("span");
+      marker.className = "option-label";
+      marker.textContent = String.fromCharCode(65 + optionIndex);
+      const text = document.createElement("div");
+      text.className = "option-text";
+      text.textContent = option.text;
+      row.append(radio, marker, text);
+      options.appendChild(row);
+    });
+  } else if (qType === "multi_select") {
+    const currentAnswers = new Set(state.answers[String(question.id)] || []);
+    question.options.forEach((option, optionIndex) => {
+      const row = document.createElement("label");
+      row.className = "option";
+      row.dataset.option = optionIndex;
+      const checkbox = document.createElement("input");
+      checkbox.type = "checkbox";
+      checkbox.name = `question-${question.id}`;
+      checkbox.value = optionIndex;
+      checkbox.checked = currentAnswers.has(optionIndex);
+      checkbox.disabled = state.submitted;
+      checkbox.addEventListener("change", (e) => {
+        if (e.target.checked) currentAnswers.add(optionIndex);
+        else currentAnswers.delete(optionIndex);
+        
+        if (currentAnswers.size > 0) {
+            state.answers[String(question.id)] = Array.from(currentAnswers);
+        } else {
+            delete state.answers[String(question.id)];
+        }
+        clearFeedback(card);
+        state.checked.delete(question.id);
+        updateProgress();
+      });
+      const marker = document.createElement("span");
+      marker.className = "option-label";
+      marker.innerHTML = `✓`;
+      const text = document.createElement("div");
+      text.className = "option-text";
+      text.textContent = option.text;
+      row.append(checkbox, marker, text);
+      options.appendChild(row);
+    });
+  } else if (qType === "fill_in_the_blank" || qType === "code_output") {
+    const inputRow = document.createElement("div");
+    inputRow.className = "option-text-input";
+    inputRow.style.padding = "0.5rem 0";
+    
+    let inputEl;
+    if (qType === "code_output") {
+      inputEl = document.createElement("textarea");
+      inputEl.rows = 3;
+      inputEl.style.fontFamily = "monospace";
+    } else {
+      inputEl = document.createElement("input");
+      inputEl.type = "text";
+    }
+    
+    inputEl.className = "text-input";
+    inputEl.value = state.answers[String(question.id)] || "";
+    inputEl.disabled = state.submitted;
+    inputEl.placeholder = t("chooseAnswer");
+    inputEl.style.width = "100%";
+    inputEl.addEventListener("input", (e) => {
+      const val = e.target.value;
+      if (val.trim()) {
+        state.answers[String(question.id)] = val;
+      } else {
+        delete state.answers[String(question.id)];
+      }
       clearFeedback(card);
       state.checked.delete(question.id);
       updateProgress();
     });
-    const marker = document.createElement("span");
-    marker.className = "option-label";
-    marker.textContent = String.fromCharCode(65 + optionIndex);
-    const text = document.createElement("div");
-    text.className = "option-text";
-    text.textContent = option.text;
-    row.append(radio, marker, text);
-    options.appendChild(row);
-  });
+    
+    inputRow.appendChild(inputEl);
+    options.appendChild(inputRow);
+  }
+
   card.appendChild(options);
 
   const feedback = document.createElement("div");
@@ -424,6 +552,7 @@ function renderQuiz() {
 function clearFeedback(card) {
   card.classList.remove("question--unanswered");
   card.querySelectorAll(".option").forEach((row) => row.classList.remove("option--correct", "option--wrong"));
+  card.querySelectorAll(".option-rationale").forEach((el) => el.remove());
   const feedback = card.querySelector(".question-feedback");
   feedback.className = "question-feedback hidden";
   feedback.textContent = "";
@@ -435,6 +564,14 @@ function applyAssessment(card, assessment) {
   card.querySelectorAll(".option").forEach((row, index) => {
     if (assessment.correct_options.includes(index)) row.classList.add("option--correct");
     if (assessment.selected === index && !assessment.is_correct) row.classList.add("option--wrong");
+    
+    const optionData = assessment.options[index];
+    if (optionData && optionData.rationale) {
+      const rationaleEl = document.createElement("div");
+      rationaleEl.className = "option-rationale";
+      rationaleEl.textContent = optionData.rationale;
+      row.querySelector(".option-text").appendChild(rationaleEl);
+    }
   });
   const feedback = card.querySelector(".question-feedback");
   feedback.className = `question-feedback ${assessment.is_correct ? "question-feedback--correct" : "question-feedback--wrong"}`;
@@ -572,9 +709,45 @@ async function startQuiz() {
   }
 }
 
+async function joinRoom(event) {
+  event.preventDefault();
+  const input = document.getElementById("roomCodeInput");
+  const code = input.value.trim().toUpperCase();
+  if (!code) return;
+  
+  const errorEl = document.getElementById("joinRoomError");
+  errorEl.textContent = "";
+  errorEl.classList.add("hidden");
+  loadingOverlay.classList.remove("hidden");
+  
+  try {
+    const result = await api("/api/quizzes/room", { code, language: state.language });
+    state.quizToken = result.token;
+    state.questions = result.questions;
+    state.answers = {};
+    state.checked.clear();
+    state.submitted = false;
+    quizTitle.textContent = result.topics.join(" + ");
+    summaryBox.classList.add("hidden");
+    topicResults.classList.add("hidden");
+    mistakeNav.classList.add("hidden");
+    renderQuiz();
+    document.querySelector(".quiz-stage").scrollIntoView({ behavior: "smooth", block: "start" });
+    if (result.time_limit_minutes) {
+      startQuizTimer(result.time_limit_minutes);
+    }
+  } catch (error) {
+    errorEl.textContent = error.message;
+    errorEl.classList.remove("hidden");
+  } finally {
+    loadingOverlay.classList.add("hidden");
+  }
+}
+
 async function submitQuiz() {
   if (!state.quizToken || state.submitted) return;
   submitButton.disabled = true;
+  clearQuizTimer();
   try {
     const payload = await api(`/api/quizzes/${state.quizToken}/submit`, { answers: state.answers });
     state.submitted = true;
@@ -630,6 +803,7 @@ document.querySelectorAll("[data-quiz-size]").forEach((button) => {
 });
 generateBtn.addEventListener("click", startQuiz);
 submitButton.addEventListener("click", submitQuiz);
+document.getElementById("joinRoomForm")?.addEventListener("submit", joinRoom);
 fontSizeSlider.addEventListener("input", () => applyFontSize(fontSizeSlider.value));
 
 document.getElementById("catalogQuestionCount").textContent = bootstrap.catalog.reduce(

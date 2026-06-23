@@ -28,6 +28,17 @@ def _localized_option(option, language: str) -> str:
     ).strip()
 
 
+def _localized_rationale(question, option, language: str) -> str:
+    if not question.get("option_rationales_json"):
+        return ""
+    try:
+        rationales = json.loads(question["option_rationales_json"])
+        lang_rationales = rationales.get(language) or rationales.get("en") or {}
+        return lang_rationales.get(option.get("text_en")) or lang_rationales.get(option.get("text_ru")) or ""
+    except Exception:
+        return ""
+
+
 def _balanced_sample(questions, topic_ids, count):
     by_topic = defaultdict(list)
     for question in questions:
@@ -51,7 +62,7 @@ def _balanced_sample(questions, topic_ids, count):
     return selected
 
 
-def create_quiz(topic_ids, count: int, language: str, difficulty: str, user_id=None):
+def create_quiz(topic_ids, count: int, language: str, difficulty: str, user_id=None, room_id=None):
     if language not in ALLOWED_LANGUAGES:
         raise ValueError("Unsupported language.")
     if difficulty not in ALLOWED_DIFFICULTIES:
@@ -69,7 +80,7 @@ def create_quiz(topic_ids, count: int, language: str, difficulty: str, user_id=N
         question
         for question in questions
         if _localized(question, "text", language)
-        and len(json.loads(question["options_json"])) >= 2
+        and len(json.loads(question["options_json"])) >= 1
     ]
     if not available_questions:
         raise ValueError("No questions are available for this selection.")
@@ -83,7 +94,6 @@ def create_quiz(topic_ids, count: int, language: str, difficulty: str, user_id=N
         normalized_topic_ids,
         count,
     )
-    question_ids = [question["id"] for question in selected]
     option_orders = {}
     public_questions = []
     for question in selected:
@@ -96,19 +106,23 @@ def create_quiz(topic_ids, count: int, language: str, difficulty: str, user_id=N
             "text": _localized(question, "text", language),
             "topic": _localized(question, "topic_title", language),
             "difficulty": question["difficulty"],
+            "question_type": question.get("question_type", "mcq"),
             "options": [
                 {"id": display_index, "text": _localized_option(options[original_index], language)}
                 for display_index, original_index in enumerate(order)
             ],
         })
 
+    random.shuffle(public_questions)
+    question_ids = [question["id"] for question in public_questions]
+
     token = secrets.token_urlsafe(32)
     with get_db_connection() as connection:
         db_execute(connection, """
             INSERT INTO quiz_sessions (
                 token, user_id, language, question_order_json,
-                option_orders_json, topic_ids_json
-            ) VALUES (%s, %s, %s, %s, %s, %s)
+                option_orders_json, topic_ids_json, room_id
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s)
         """, (
             token,
             user_id,
@@ -116,6 +130,7 @@ def create_quiz(topic_ids, count: int, language: str, difficulty: str, user_id=N
             json.dumps(question_ids),
             json.dumps(option_orders),
             json.dumps(normalized_topic_ids),
+            room_id,
         ))
         connection.commit()
 
@@ -126,7 +141,28 @@ def create_quiz(topic_ids, count: int, language: str, difficulty: str, user_id=N
         "question_count": len(public_questions),
         "topics": topic_names,
         "questions": public_questions,
+        "room_id": room_id,
     }
+
+
+def create_quiz_from_room(code: str, language: str, user_id=None):
+    from app.models.room import fetch_room_by_code
+    room = fetch_room_by_code(code)
+    if not room:
+        raise ValueError("Invalid or inactive room code.")
+    
+    topic_ids = json.loads(room["topic_ids_json"])
+    quiz_data = create_quiz(
+        topic_ids=topic_ids,
+        count=room["question_count"],
+        language=language,
+        difficulty=room["difficulty"] or "all",
+        user_id=user_id,
+        room_id=room["id"]
+    )
+    quiz_data["time_limit_minutes"] = room.get("time_limit_minutes")
+    return quiz_data
+
 
 
 def fetch_quiz_session(token: str):
@@ -146,7 +182,7 @@ def _load_quiz_rows(quiz_session):
     with get_db_connection() as connection:
         rows = db_execute(connection, f"""
             SELECT q.id, q.topic_id, q.text_en, q.text_ru, q.options_json,
-                   q.explanation_en, q.explanation_ru, q.difficulty,
+                   q.explanation_en, q.explanation_ru, q.option_rationales_json, q.difficulty,
                    t.title_en AS topic_title_en, t.title_ru AS topic_title_ru
             FROM questions q
             JOIN topics t ON t.id = q.topic_id
@@ -156,45 +192,126 @@ def _load_quiz_rows(quiz_session):
     return [rows_by_id[question_id] for question_id in question_ids if question_id in rows_by_id]
 
 
-def _assess_question(question, option_order, selected_display_index, language):
+def _assess_question(question, option_order, user_answer, language):
     options = json.loads(question["options_json"])
+    question_type = question.get("question_type", "mcq")
+    
     correct_original = {
         index for index, option in enumerate(options) if option.get("is_correct")
     }
-    selected_original = None
-    if isinstance(selected_display_index, int) and 0 <= selected_display_index < len(option_order):
-        selected_original = option_order[selected_display_index]
+    
+    is_correct = False
+    is_unanswered = False
+    selected_answer = None
+    
+    if question_type in ("mcq", "true_false"):
+        try:
+            selected_display_index = int(user_answer) if user_answer is not None else None
+        except (TypeError, ValueError):
+            selected_display_index = None
+            
+        is_unanswered = selected_display_index is None
+        selected_original = None
+        if not is_unanswered and 0 <= selected_display_index < len(option_order):
+            selected_original = option_order[selected_display_index]
+            
+        is_correct = selected_original in correct_original if selected_original is not None else False
+        if selected_original is not None:
+            selected_answer = _localized_option(options[selected_original], language)
+            
+        options_formatted = [
+            {
+                "text": _localized_option(options[original_index], language),
+                "is_correct": original_index in correct_original,
+                "is_selected": display_index == selected_display_index,
+                "rationale": _localized_rationale(question, options[original_index], language),
+            }
+            for display_index, original_index in enumerate(option_order)
+        ]
+        
+    elif question_type == "multi_select":
+        if isinstance(user_answer, list):
+            selected_display_indices = [int(i) for i in user_answer if str(i).isdigit()]
+        elif isinstance(user_answer, str) or isinstance(user_answer, int):
+            try:
+                selected_display_indices = [int(user_answer)]
+            except (TypeError, ValueError):
+                selected_display_indices = []
+        else:
+            selected_display_indices = []
+            
+        is_unanswered = len(selected_display_indices) == 0
+        
+        selected_originals = set()
+        for idx in selected_display_indices:
+            if 0 <= idx < len(option_order):
+                selected_originals.add(option_order[idx])
+                
+        is_correct = not is_unanswered and selected_originals == correct_original
+        
+        selected_answer = ", ".join(
+            _localized_option(options[orig], language) for orig in selected_originals
+        )
+        
+        options_formatted = [
+            {
+                "text": _localized_option(options[original_index], language),
+                "is_correct": original_index in correct_original,
+                "is_selected": display_index in selected_display_indices,
+                "rationale": _localized_rationale(question, options[original_index], language),
+            }
+            for display_index, original_index in enumerate(option_order)
+        ]
+        
+    elif question_type in ("fill_in_the_blank", "code_output"):
+        user_answer_str = str(user_answer).strip() if user_answer else ""
+        is_unanswered = not user_answer_str
+        selected_answer = user_answer_str
+        
+        correct_answers_texts = [
+            _localized_option(options[idx], language).strip() for idx in correct_original
+        ]
+        
+        if not is_unanswered:
+            is_correct = any(user_answer_str == t for t in correct_answers_texts)
+        else:
+            is_correct = False
+            
+        options_formatted = [
+            {
+                "text": _localized_option(options[original_index], language),
+                "is_correct": original_index in correct_original,
+                "is_selected": False,
+                "rationale": _localized_rationale(question, options[original_index], language),
+            }
+            for display_index, original_index in enumerate(option_order)
+        ]
+        
+    else:
+        options_formatted = []
+
     correct_display = [
         display_index
         for display_index, original_index in enumerate(option_order)
         if original_index in correct_original
     ]
-    selected_answer = None
-    if selected_original is not None:
-        selected_answer = _localized_option(options[selected_original], language)
     correct_answers = [
         _localized_option(options[index], language)
         for index in sorted(correct_original)
     ]
     return {
         "question_id": question["id"],
-        "selected": selected_display_index,
+        "question_type": question_type,
+        "selected": user_answer,
         "correct_options": correct_display,
-        "is_correct": selected_original in correct_original if selected_original is not None else False,
-        "is_unanswered": selected_original is None,
+        "is_correct": is_correct,
+        "is_unanswered": is_unanswered,
         "selected_answer": selected_answer,
         "correct_answers": correct_answers,
         "explanation": _localized(question, "explanation", language),
         "topic": _localized(question, "topic_title", language),
         "text": _localized(question, "text", language),
-        "options": [
-            {
-                "text": _localized_option(options[original_index], language),
-                "is_correct": original_index in correct_original,
-                "is_selected": display_index == selected_display_index,
-            }
-            for display_index, original_index in enumerate(option_order)
-        ],
+        "options": options_formatted,
     }
 
 
@@ -241,18 +358,14 @@ def submit_quiz(token: str, answers, user_id=None):
     normalized_answers = {}
     for question in rows:
         raw_selected = answers.get(str(question["id"]), answers.get(question["id"]))
-        try:
-            selected = int(raw_selected) if raw_selected is not None else None
-        except (TypeError, ValueError):
-            selected = None
         assessment = _assess_question(
             question,
             option_orders[str(question["id"])],
-            selected,
+            raw_selected,
             quiz_session["language"],
         )
         review.append(assessment)
-        normalized_answers[str(question["id"])] = selected
+        normalized_answers[str(question["id"])] = raw_selected
         if assessment["is_correct"]:
             correct += 1
         if assessment["is_unanswered"]:
@@ -282,6 +395,7 @@ def submit_quiz(token: str, answers, user_id=None):
         "source_label": ", ".join(topic_names),
         "review": review,
         "answers": normalized_answers,
+        "room_id": quiz_session["room_id"],
     }
 
 

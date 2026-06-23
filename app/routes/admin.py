@@ -21,6 +21,11 @@ from app.models.user import (
     serialize_user,
     toggle_user_admin,
 )
+from app.models.room import (
+    create_room,
+    fetch_rooms_for_admin,
+    toggle_room_active,
+)
 from app.parsing import parse_uploaded_file
 from app.utils import admin_required
 
@@ -90,6 +95,7 @@ def register_admin_routes(app):
         user = fetch_user_by_id(session["user_id"])
         edit_question_id = request.args.get("edit_question", type=int)
         edit_question = fetch_question(edit_question_id) if edit_question_id else None
+        from app.models.group import fetch_groups_for_admin
         return render_template(
             "admin.html",
             current_user=serialize_user(user),
@@ -99,6 +105,8 @@ def register_admin_routes(app):
             ],
             edit_question=_serialize_admin_question(edit_question),
             users=[dict(row) for row in fetch_users()],
+            rooms=[dict(row) for row in fetch_rooms_for_admin()],
+            groups=[dict(row) for row in fetch_groups_for_admin()],
             error=request.args.get("error"),
             success=request.args.get("success"),
         )
@@ -257,3 +265,87 @@ def register_admin_routes(app):
             return _redirect_with("error", "You cannot delete your own account.")
         delete_user(user_id)
         return _redirect_with("success", "User deleted.")
+
+    @app.route("/admin/rooms", methods=["POST"], endpoint="admin_create_room")
+    @admin_required
+    def admin_create_room():
+        title = request.form.get("title", "").strip()
+        topic_ids = request.form.getlist("topic_ids")
+        if not title or not topic_ids:
+            return _redirect_with("error", "Title and at least one topic are required.")
+        
+        topic_ids = [int(tid) for tid in topic_ids if tid.isdigit()]
+        difficulty = request.form.get("difficulty")
+        if difficulty == "any":
+            difficulty = None
+        
+        question_count = request.form.get("question_count", type=int, default=10)
+        time_limit = request.form.get("time_limit", type=int)
+        max_attempts = request.form.get("max_attempts", type=int)
+        
+        try:
+            _, code = create_room(
+                title=title,
+                created_by=session["user_id"],
+                topic_ids=topic_ids,
+                difficulty=difficulty,
+                question_count=question_count,
+                time_limit_minutes=time_limit or None,
+                max_attempts=max_attempts or None
+            )
+            return _redirect_with("success", f"Room created successfully! Code: {code}")
+        except Exception as e:
+            return _redirect_with("error", f"Failed to create room: {str(e)}")
+
+    @app.route("/admin/rooms/<int:room_id>/toggle", methods=["POST"], endpoint="admin_toggle_room")
+    @admin_required
+    def admin_toggle_room(room_id):
+        toggle_room_active(room_id)
+        return _redirect_with("success", "Room status updated.")
+
+    @app.route("/admin/rooms/<int:room_id>/results", endpoint="admin_room_results")
+    @admin_required
+    def admin_room_results(room_id):
+        from app.models.room import fetch_room_by_id, fetch_room_results, analyze_room_questions
+        from app.models.group import fetch_groups_for_admin
+        room = fetch_room_by_id(room_id)
+        if not room:
+            return _redirect_with("error", "Room not found.")
+            
+        group_id = request.args.get("group_id", type=int)
+        results = fetch_room_results(room_id, group_id=group_id)
+        
+        # Serialize the datetime
+        serialized_results = []
+        for r in results:
+            d = dict(r)
+            d["created_at_str"] = d["created_at"].strftime("%Y-%m-%d %H:%M:%S") if hasattr(d["created_at"], "strftime") else str(d["created_at"])
+            serialized_results.append(d)
+            
+        question_stats = analyze_room_questions(results)
+        groups = fetch_groups_for_admin()
+            
+        return render_template(
+            "room_results.html",
+            current_user=serialize_user(fetch_user_by_id(session["user_id"])),
+            room=dict(room),
+            results=serialized_results,
+            question_stats=question_stats,
+            groups=[dict(g) for g in groups],
+            current_group_id=group_id
+        )
+
+    @app.route("/admin/groups", methods=["POST"], endpoint="admin_create_group")
+    @admin_required
+    def admin_create_group():
+        from app.models.group import create_group
+        name = request.form.get("name", "").strip()
+        if not name:
+            return _redirect_with("error", "Group name is required.")
+        try:
+            group_id, code = create_group(name=name, created_by=session["user_id"])
+            return _redirect_with("success", f"Group created successfully! Code: {code}")
+        except Exception as e:
+            return _redirect_with("error", f"Failed to create group: {str(e)}")
+
+

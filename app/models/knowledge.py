@@ -95,7 +95,7 @@ def fetch_questions_for_topics(
     with get_db_connection() as connection:
         return db_execute(connection, f"""
             SELECT q.id, q.topic_id, q.text_en, q.text_ru, q.options_json,
-                   q.explanation_en, q.explanation_ru, q.difficulty, q.is_active,
+                   q.explanation_en, q.explanation_ru, q.option_rationales_json, q.difficulty, q.is_active, q.question_type,
                    t.title_en AS topic_title_en, t.title_ru AS topic_title_ru,
                    c.title_en AS course_title_en, c.title_ru AS course_title_ru
             FROM questions q
@@ -110,7 +110,7 @@ def fetch_question(question_id: int):
     with get_db_connection() as connection:
         return db_execute(connection, """
             SELECT q.id, q.topic_id, q.text_en, q.text_ru, q.options_json,
-                   q.explanation_en, q.explanation_ru, q.difficulty, q.is_active,
+                   q.explanation_en, q.explanation_ru, q.option_rationales_json, q.difficulty, q.is_active, q.question_type,
                    t.title_en AS topic_title_en, t.title_ru AS topic_title_ru
             FROM questions q
             JOIN topics t ON t.id = q.topic_id
@@ -122,7 +122,7 @@ def fetch_questions_for_admin():
     with get_db_connection() as connection:
         return db_execute(connection, """
             SELECT q.id, q.topic_id, q.text_en, q.text_ru, q.options_json,
-                   q.explanation_en, q.explanation_ru, q.difficulty, q.is_active,
+                   q.explanation_en, q.explanation_ru, q.option_rationales_json, q.difficulty, q.is_active, q.question_type,
                    t.title_en AS topic_title_en, t.title_ru AS topic_title_ru,
                    c.title_en AS course_title_en, c.title_ru AS course_title_ru
             FROM questions q
@@ -179,7 +179,9 @@ def create_question(
     options,
     explanation_en: str = "",
     explanation_ru: str = "",
+    option_rationales: Optional[dict] = None,
     difficulty: str = "beginner",
+    question_type: str = "mcq",
 ):
     with get_db_connection() as connection:
         question_id = _insert_and_get_id(
@@ -187,8 +189,8 @@ def create_question(
             """
             INSERT INTO questions (
                 topic_id, text_en, text_ru, options_json,
-                explanation_en, explanation_ru, difficulty
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s)
+                explanation_en, explanation_ru, option_rationales_json, difficulty, question_type
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
             """,
             (
                 topic_id,
@@ -197,7 +199,9 @@ def create_question(
                 json.dumps(options, ensure_ascii=False),
                 explanation_en.strip(),
                 explanation_ru.strip(),
+                json.dumps(option_rationales or {}, ensure_ascii=False),
                 difficulty,
+                question_type,
             ),
         )
         connection.commit()
@@ -212,13 +216,15 @@ def update_question(
     options,
     explanation_en: str,
     explanation_ru: str,
+    option_rationales: Optional[dict],
     difficulty: str,
+    question_type: str = "mcq",
 ):
     with get_db_connection() as connection:
         db_execute(connection, """
             UPDATE questions
             SET topic_id = %s, text_en = %s, text_ru = %s, options_json = %s,
-                explanation_en = %s, explanation_ru = %s, difficulty = %s
+                explanation_en = %s, explanation_ru = %s, option_rationales_json = %s, difficulty = %s, question_type = %s
             WHERE id = %s
         """, (
             topic_id,
@@ -227,7 +233,9 @@ def update_question(
             json.dumps(options, ensure_ascii=False),
             explanation_en.strip(),
             explanation_ru.strip(),
+            json.dumps(option_rationales or {}, ensure_ascii=False),
             difficulty,
+            question_type,
             question_id,
         ))
         connection.commit()
@@ -369,6 +377,12 @@ def synchronize_python_curriculum():
                     question.get("explanation_ru")
                     or _teaching_explanation(topic, question, "ru")
                 )
+                
+                option_rationales = {
+                    "en": question.get("option_rationales_en", {}),
+                    "ru": question.get("option_rationales_ru", {})
+                }
+                
                 existing_question = db_execute(
                     connection,
                     "SELECT id FROM questions WHERE curriculum_key = %s",
@@ -381,21 +395,23 @@ def synchronize_python_curriculum():
                     json.dumps(options, ensure_ascii=False),
                     explanation_en,
                     explanation_ru,
+                    json.dumps(option_rationales, ensure_ascii=False),
                     question["difficulty"],
+                    question.get("question_type", "mcq"),
                 )
                 if existing_question:
                     db_execute(connection, """
                         UPDATE questions
                         SET topic_id = %s, text_en = %s, text_ru = %s,
                             options_json = %s, explanation_en = %s,
-                            explanation_ru = %s, difficulty = %s
+                            explanation_ru = %s, option_rationales_json = %s, difficulty = %s, question_type = %s
                         WHERE id = %s
                     """, (*values, existing_question["id"]))
                 else:
                     db_execute(connection, """
                         INSERT INTO questions (
                             topic_id, text_en, text_ru, options_json,
-                            explanation_en, explanation_ru, difficulty, curriculum_key
-                        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                            explanation_en, explanation_ru, option_rationales_json, difficulty, question_type, curriculum_key
+                        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     """, (*values, question_key))
         connection.commit()

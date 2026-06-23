@@ -23,11 +23,48 @@ def register_main_routes(app):
     def profile():
         user = fetch_user_by_id(session["user_id"])
         results = fetch_results_for_user(user["id"])
+        serialized = [serialize_result(r) for r in results]
+        
+        from app.models.group import fetch_user_groups
+        user_groups = fetch_user_groups(user["id"])
+        
+        total_tests = len(serialized)
+        total_questions = sum(r["graded"] for r in serialized)
+        total_correct = sum(r["correct"] for r in serialized)
+        average_score = round((total_correct / total_questions) * 100) if total_questions > 0 else 0
+        
+        import json
+        
+        from flask import request
         return render_template(
             "profile.html",
             current_user=serialize_user(user),
-            results=[serialize_result(r) for r in results],
+            results=serialized,
+            user_groups=[dict(g) for g in user_groups],
+            stats={
+                "total_tests": total_tests,
+                "total_questions": total_questions,
+                "average_score": average_score
+            },
+            results_json=json.dumps(serialized),
+            error=request.args.get("error"),
+            success=request.args.get("success")
         )
+
+    @app.route("/profile/join-group", methods=["POST"], endpoint="profile_join_group")
+    @login_required
+    def profile_join_group():
+        from flask import request
+        from app.models.group import join_group
+        code = request.form.get("code", "").strip().upper()
+        if not code:
+            return redirect(url_for("profile", error="Please enter a group code."))
+        
+        success, message = join_group(code, session["user_id"])
+        if success:
+            return redirect(url_for("profile", success=message))
+        else:
+            return redirect(url_for("profile", error=message))
 
     @app.route("/profile/results/<int:result_id>", endpoint="profile_result_detail")
     @login_required
