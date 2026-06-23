@@ -57,6 +57,7 @@ const copy = {
     score: "Score",
     correctAnswers: "{correct} of {total} correct",
     unanswered: "{count} unanswered",
+    submitConfirm: "Are you sure you want to submit?",
     saved: "This result was saved to your profile.",
     guest: "Log in to save future results.",
     mistakes: "Review:",
@@ -129,6 +130,7 @@ const copy = {
     score: "Результат",
     correctAnswers: "Верно: {correct} из {total}",
     unanswered: "Без ответа: {count}",
+    submitConfirm: "Вы уверены, что хотите завершить тест?",
     saved: "Результат сохранен в профиле.",
     guest: "Войдите, чтобы сохранять следующие результаты.",
     mistakes: "Разобрать:",
@@ -656,7 +658,7 @@ function triggerConfetti() {
 }
 
 function renderResult(result, savedResult) {
-  const scorePercent = result.score_percent;
+  const scorePercent = result.score_percent || 0;
   let gradeColor = scorePercent >= 80 ? '#10b981' : scorePercent >= 50 ? '#f59e0b' : '#ef4444';
   let gradeMessage = scorePercent >= 80 ? (t("excellent") || "Excellent!") : scorePercent >= 50 ? (t("good") || "Good Job!") : (t("needs_practice") || "Needs Practice");
 
@@ -811,6 +813,20 @@ async function joinRoom(event) {
 
 async function submitQuiz() {
   if (!state.quizToken || state.submitted) return;
+
+  const unanswered = state.questions.filter((q) => {
+    const ans = state.answers[q.id];
+    if (q.question_type === "multi_select") {
+      return !ans || ans.length === 0;
+    }
+    return ans === undefined || ans === null || ans === "";
+  });
+
+  if (unanswered.length > 0) {
+    const confirmMessage = (t("unanswered", { count: unanswered.length }) || "You have unanswered questions.") + "\n" + (t("submitConfirm") || "Are you sure you want to submit?");
+    if (!confirm(confirmMessage)) return;
+  }
+
   submitButton.disabled = true;
   clearQuizTimer();
   try {

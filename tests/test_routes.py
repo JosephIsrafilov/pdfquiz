@@ -126,6 +126,30 @@ def test_topic_quiz_hides_answers_and_grades_on_server(client):
     assert all(item["explanation"] for item in result["review"])
 
 
+def test_empty_submit(client):
+    from app.models.knowledge import fetch_catalog
+    
+    # Login
+    client.post("/register", data={"username": "testuser_empty", "password": "password123", "password_repeat": "password123"}, follow_redirects=True)
+    client.post("/login", data={"username": "testuser_empty", "password": "password123"}, follow_redirects=True)
+    
+    topics = fetch_catalog()[0]["topics"]
+    topic_id = topics[0]["id"]
+    
+    # Generate quiz
+    resp = client.post('/api/quizzes', json={'topic_ids': [topic_id], 'count': 2})
+    token = resp.get_json()['token']
+    
+    # Submit empty answers
+    resp2 = client.post(f'/api/quizzes/{token}/submit', json={'answers': {}})
+    assert resp2.status_code == 200
+    assert resp2.get_json()["result"]["unanswered"] == 2
+    
+    # Check profile loads without 500 error
+    resp3 = client.get('/profile', follow_redirects=True)
+    assert resp3.status_code == 200
+    assert b"My Groups" in resp3.data
+
 
 def test_topic_quiz_rejects_unavailable_count(client):
     from app.models.knowledge import fetch_catalog
