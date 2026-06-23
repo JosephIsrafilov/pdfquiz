@@ -9,7 +9,8 @@ def fetch_results_for_user(user_id: int, limit: int = 50):
         return db_execute(connection, """
             SELECT r.id, r.user_id, r.document_id, r.source_label,
                    r.total_questions, r.quiz_size, r.graded, r.correct,
-                   r.unanswered, r.missing_answer_key, r.mistake_numbers,
+                   r.unanswered, r.missing_answer_key,
+                   r.mistake_numbers_json AS mistake_numbers,
                    r.attempt_json, r.created_at, d.title AS document_title
             FROM results r
             LEFT JOIN documents d ON r.document_id = d.id
@@ -24,7 +25,8 @@ def fetch_result_for_user(result_id: int, user_id: int):
         return db_execute(connection, """
             SELECT r.id, r.user_id, r.document_id, r.source_label,
                    r.total_questions, r.quiz_size, r.graded, r.correct,
-                   r.unanswered, r.missing_answer_key, r.mistake_numbers,
+                   r.unanswered, r.missing_answer_key,
+                   r.mistake_numbers_json AS mistake_numbers,
                    r.attempt_json, r.created_at, d.title AS document_title
             FROM results r
             LEFT JOIN documents d ON r.document_id = d.id
@@ -53,7 +55,7 @@ def save_result(
             INSERT INTO results (
                 user_id, document_id, source_label, total_questions, quiz_size,
                 graded, correct, unanswered, missing_answer_key,
-                mistake_numbers, attempt_json, room_id
+                mistake_numbers_json, attempt_json, room_id
             ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """, (
             user_id, document_id, source_label, total_questions, quiz_size,

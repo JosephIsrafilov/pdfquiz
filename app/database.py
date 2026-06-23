@@ -91,7 +91,7 @@ def init_db():
                     correct INTEGER,
                     unanswered INTEGER,
                     missing_answer_key INTEGER,
-                    mistake_numbers TEXT,
+                    mistake_numbers_json TEXT,
                     attempt_json TEXT,
                     created_at TIMESTAMP DEFAULT NOW()
                 )
@@ -226,7 +226,7 @@ def init_db():
                     correct INTEGER,
                     unanswered INTEGER,
                     missing_answer_key INTEGER,
-                    mistake_numbers TEXT,
+                    mistake_numbers_json TEXT,
                     attempt_json TEXT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
