@@ -179,16 +179,22 @@ def init_db():
                     expires_at TIMESTAMP
                 )
             """)
-            try:
-                connection.execute("ALTER TABLE results ADD COLUMN IF NOT EXISTS attempt_json TEXT")
-                connection.execute("ALTER TABLE topics ADD COLUMN IF NOT EXISTS curriculum_key TEXT")
-                connection.execute("ALTER TABLE questions ADD COLUMN IF NOT EXISTS curriculum_key TEXT")
-                connection.execute("ALTER TABLE questions ADD COLUMN IF NOT EXISTS option_rationales_json TEXT")
-                connection.execute("ALTER TABLE questions ADD COLUMN IF NOT EXISTS question_type TEXT NOT NULL DEFAULT 'mcq'")
-                connection.execute("ALTER TABLE quiz_sessions ADD COLUMN IF NOT EXISTS room_id INTEGER REFERENCES rooms(id) ON DELETE CASCADE")
-                connection.execute("ALTER TABLE results ADD COLUMN IF NOT EXISTS room_id INTEGER REFERENCES rooms(id) ON DELETE CASCADE")
-            except Exception:
-                pass
+            connection.commit()
+            alters = [
+                "ALTER TABLE results ADD COLUMN IF NOT EXISTS attempt_json TEXT",
+                "ALTER TABLE topics ADD COLUMN IF NOT EXISTS curriculum_key TEXT",
+                "ALTER TABLE questions ADD COLUMN IF NOT EXISTS curriculum_key TEXT",
+                "ALTER TABLE questions ADD COLUMN IF NOT EXISTS option_rationales_json TEXT",
+                "ALTER TABLE questions ADD COLUMN IF NOT EXISTS question_type TEXT NOT NULL DEFAULT 'mcq'",
+                "ALTER TABLE quiz_sessions ADD COLUMN IF NOT EXISTS room_id INTEGER REFERENCES rooms(id) ON DELETE CASCADE",
+                "ALTER TABLE results ADD COLUMN IF NOT EXISTS room_id INTEGER REFERENCES rooms(id) ON DELETE CASCADE",
+            ]
+            for query in alters:
+                try:
+                    connection.execute(query)
+                    connection.commit()
+                except Exception:
+                    connection.rollback()
         else:
             connection.execute("""
                 CREATE TABLE IF NOT EXISTS users (
@@ -308,32 +314,20 @@ def init_db():
                     expires_at TIMESTAMP
                 )
             """)
-            try:
-                connection.execute("ALTER TABLE results ADD COLUMN attempt_json TEXT")
-            except Exception:
-                pass
-            try:
-                connection.execute("ALTER TABLE topics ADD COLUMN curriculum_key TEXT")
-            except Exception:
-                pass
-            try:
-                connection.execute("ALTER TABLE questions ADD COLUMN curriculum_key TEXT")
-            except Exception:
-                pass
-            try:
-                connection.execute("ALTER TABLE questions ADD COLUMN option_rationales_json TEXT")
-            except Exception:
-                pass
-            try:
-                connection.execute("ALTER TABLE questions ADD COLUMN question_type TEXT NOT NULL DEFAULT 'mcq'")
-            except Exception:
-                pass
-            try:
-                connection.execute("ALTER TABLE quiz_sessions ADD COLUMN room_id INTEGER REFERENCES rooms(id) ON DELETE CASCADE")
-            except Exception:
-                pass
-            try:
-                connection.execute("ALTER TABLE results ADD COLUMN room_id INTEGER REFERENCES rooms(id) ON DELETE CASCADE")
-            except Exception:
-                pass
+            connection.commit()
+            sqlite_alters = [
+                "ALTER TABLE results ADD COLUMN attempt_json TEXT",
+                "ALTER TABLE topics ADD COLUMN curriculum_key TEXT",
+                "ALTER TABLE questions ADD COLUMN curriculum_key TEXT",
+                "ALTER TABLE questions ADD COLUMN option_rationales_json TEXT",
+                "ALTER TABLE questions ADD COLUMN question_type TEXT NOT NULL DEFAULT 'mcq'",
+                "ALTER TABLE quiz_sessions ADD COLUMN room_id INTEGER REFERENCES rooms(id) ON DELETE CASCADE",
+                "ALTER TABLE results ADD COLUMN room_id INTEGER REFERENCES rooms(id) ON DELETE CASCADE",
+            ]
+            for query in sqlite_alters:
+                try:
+                    connection.execute(query)
+                    connection.commit()
+                except Exception:
+                    connection.rollback()
         connection.commit()

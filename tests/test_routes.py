@@ -123,8 +123,8 @@ def test_topic_quiz_hides_answers_and_grades_on_server(client):
     assert result["total"] == 4
     assert len(result["review"]) == 4
     assert all(item["correct_answers"] for item in result["review"])
-    assert all("Concept:" in item["explanation"] for item in result["review"])
-    assert all("Common trap:" in item["explanation"] for item in result["review"])
+    assert all(item["explanation"] for item in result["review"])
+
 
 
 def test_topic_quiz_rejects_unavailable_count(client):

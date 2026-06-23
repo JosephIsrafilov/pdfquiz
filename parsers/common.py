@@ -159,12 +159,16 @@ def expand_bullet_lines(lines: List[str]) -> List[str]:
         elif marker_count == 1 and not OPTION_BULLET_PATTERN.match(line):
             first_idx = first_marker_index(line)
             if first_idx > 0:
-                before = line[:first_idx].rstrip()
-                after = line[first_idx:].lstrip()
-                if before:
-                    expanded.append(before)
-                if after:
-                    expanded.append(after)
+                if first_idx >= len(line.rstrip()) - 1:
+                    expanded.append(line)
+                else:
+                    before = line[:first_idx].rstrip()
+                    after = line[first_idx:].lstrip()
+                    if before:
+                        expanded.append(before)
+                    if after:
+                        expanded.append(after)
+                i += 1
                 continue
             expanded.append(line)
         else:

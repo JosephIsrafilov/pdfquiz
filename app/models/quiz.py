@@ -29,7 +29,7 @@ def _localized_option(option, language: str) -> str:
 
 
 def _localized_rationale(question, option, language: str) -> str:
-    if not question.get("option_rationales_json"):
+    if not (question["option_rationales_json"] if "option_rationales_json" in question.keys() else None):
         return ""
     try:
         rationales = json.loads(question["option_rationales_json"])
@@ -106,7 +106,7 @@ def create_quiz(topic_ids, count: int, language: str, difficulty: str, user_id=N
             "text": _localized(question, "text", language),
             "topic": _localized(question, "topic_title", language),
             "difficulty": question["difficulty"],
-            "question_type": question.get("question_type", "mcq"),
+            "question_type": question["question_type"] or "mcq",
             "options": [
                 {"id": display_index, "text": _localized_option(options[original_index], language)}
                 for display_index, original_index in enumerate(order)
@@ -160,7 +160,7 @@ def create_quiz_from_room(code: str, language: str, user_id=None):
         user_id=user_id,
         room_id=room["id"]
     )
-    quiz_data["time_limit_minutes"] = room.get("time_limit_minutes")
+    quiz_data["time_limit_minutes"] = room["time_limit_minutes"] if "time_limit_minutes" in room.keys() else None
     return quiz_data
 
 
@@ -194,7 +194,7 @@ def _load_quiz_rows(quiz_session):
 
 def _assess_question(question, option_order, user_answer, language):
     options = json.loads(question["options_json"])
-    question_type = question.get("question_type", "mcq")
+    question_type = question["question_type"] if "question_type" in question.keys() else "mcq"
     
     correct_original = {
         index for index, option in enumerate(options) if option.get("is_correct")
