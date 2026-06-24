@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from flask import redirect, render_template, session, url_for
 
 from app.models.knowledge import fetch_catalog
@@ -24,23 +26,32 @@ def register_main_routes(app):
         user = fetch_user_by_id(session["user_id"])
         results = fetch_results_for_user(user["id"])
         serialized = [serialize_result(r) for r in results]
-        
+
         from app.models.group import fetch_user_groups
-        user_groups = fetch_user_groups(user["id"])
-        
+        raw_user_groups = fetch_user_groups(user["id"])
+        user_groups = []
+        for group in raw_user_groups:
+            serialized_group = dict(group)
+            joined_at = serialized_group.get("joined_at")
+            if isinstance(joined_at, datetime):
+                serialized_group["joined_at"] = joined_at.strftime("%Y-%m-%d %H:%M:%S")
+            elif joined_at is not None:
+                serialized_group["joined_at"] = str(joined_at)
+            user_groups.append(serialized_group)
+
         total_tests = len(serialized)
         total_questions = sum(r["graded"] for r in serialized)
         total_correct = sum(r["correct"] for r in serialized)
         average_score = round((total_correct / total_questions) * 100) if total_questions > 0 else 0
-        
+
         import json
-        
+
         from flask import request
         return render_template(
             "profile.html",
             current_user=serialize_user(user),
             results=serialized,
-            user_groups=[dict(g) for g in user_groups],
+            user_groups=user_groups,
             stats={
                 "total_tests": total_tests,
                 "total_questions": total_questions,

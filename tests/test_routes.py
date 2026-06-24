@@ -4,6 +4,7 @@ Integration tests for Flask routes: auth, main, admin, API.
 
 import json
 import io
+from datetime import datetime
 import pytest
 
 
@@ -212,6 +213,32 @@ def test_profile_loads_when_logged_in(client):
     )
     resp = client.get("/profile")
     assert resp.status_code == 200
+
+
+def test_profile_loads_with_datetime_group_membership(client, monkeypatch):
+    from app.models import group as group_model
+
+    client.post(
+        "/register",
+        data={"username": "testprofilegroups", "password": "pass1234", "password_repeat": "pass1234"},
+        follow_redirects=True,
+    )
+
+    def fake_fetch_user_groups(_user_id):
+        return [
+            {
+                "id": 1,
+                "name": "Group A",
+                "joined_at": datetime(2026, 6, 24, 10, 30, 0),
+                "teacher_name": "teacher1",
+            }
+        ]
+
+    monkeypatch.setattr(group_model, "fetch_user_groups", fake_fetch_user_groups)
+
+    resp = client.get("/profile")
+    assert resp.status_code == 200
+    assert b"Group A" in resp.data
 
 
 # ---------------------------------------------------------------------------
