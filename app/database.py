@@ -23,7 +23,7 @@ def get_pool():
     if _pool is None and USING_POSTGRES:
         if ConnectionPool is None:
             raise RuntimeError("psycopg_pool required when DATABASE_URL is set")
-        _pool = ConnectionPool(DATABASE_URL, kwargs={"row_factory": dict_row}, min_size=1, max_size=10, open=True)
+        _pool = ConnectionPool(DATABASE_URL, kwargs={"row_factory": dict_row, "prepare_threshold": None}, min_size=1, max_size=10, open=True)
     return _pool
 
 
