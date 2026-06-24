@@ -173,32 +173,37 @@
       </section>
 
       <section class="panel">
-        <div class="section-head">
-          <h2>Questions</h2>
-          <p>{{ questions|length }} questions currently in the bank.</p>
-        </div>
-        <div class="question-bank-list">
-          {% for question in questions %}
-          <article class="bank-question {% if not question.is_active %}bank-question--inactive{% endif %}">
-            <div>
-              <div class="bank-question__meta">{{ question.course_title_en }} · {{ question.topic_title_en }} · {{ question.difficulty }}</div>
-              <strong>{{ question.text_en or question.text_ru }}</strong>
-              <small>{{ question.text_ru if question.text_en else '' }}</small>
+        <details class="questions-accordion">
+          <summary class="questions-accordion__summary">
+            <div class="questions-accordion__heading">
+              <h2>Questions</h2>
+              <p>{{ questions|length }} questions currently in the bank.</p>
             </div>
-            <div class="admin-actions">
-              <a class="button" href="{{ url_for('admin_panel', edit_question=question.id) }}#question-editor">Edit</a>
-              <form method="post" action="{{ url_for('admin_toggle_question', question_id=question.id) }}">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
-                <button class="button" type="submit">{% if question.is_active %}Disable{% else %}Enable{% endif %}</button>
-              </form>
-              <form method="post" action="{{ url_for('admin_delete_question', question_id=question.id) }}">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
-                <button class="button button--danger" type="submit">Delete</button>
-              </form>
-            </div>
-          </article>
-          {% else %}<div class="empty-state">No questions yet.</div>{% endfor %}
-        </div>
+            <span class="questions-accordion__icon" aria-hidden="true">▾</span>
+          </summary>
+          <div class="question-bank-list">
+            {% for question in questions %}
+            <article class="bank-question {% if not question.is_active %}bank-question--inactive{% endif %}">
+              <div>
+                <div class="bank-question__meta">{{ question.course_title_en }} · {{ question.topic_title_en }} · {{ question.difficulty }}</div>
+                <strong>{{ question.text_en or question.text_ru }}</strong>
+                <small>{{ question.text_ru if question.text_en else '' }}</small>
+              </div>
+              <div class="admin-actions">
+                <a class="button" href="{{ url_for('admin_panel', edit_question=question.id) }}#question-editor">Edit</a>
+                <form method="post" action="{{ url_for('admin_toggle_question', question_id=question.id) }}">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+                  <button class="button" type="submit">{% if question.is_active %}Disable{% else %}Enable{% endif %}</button>
+                </form>
+                <form method="post" action="{{ url_for('admin_delete_question', question_id=question.id) }}">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+                  <button class="button button--danger" type="submit">Delete</button>
+                </form>
+              </div>
+            </article>
+            {% else %}<div class="empty-state">No questions yet.</div>{% endfor %}
+          </div>
+        </details>
       </section>
 
       <section class="panel admin-grid">

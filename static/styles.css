@@ -1840,6 +1840,49 @@ textarea.text-input {
   gap: 10px;
 }
 
+.questions-accordion {
+  width: 100%;
+}
+
+.questions-accordion__summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  list-style: none;
+  padding: 4px 0 16px;
+  user-select: none;
+}
+
+.questions-accordion__summary::-webkit-details-marker {
+  display: none;
+}
+
+.questions-accordion__heading h2 {
+  margin: 0;
+}
+
+.questions-accordion__heading p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.questions-accordion__icon {
+  font-size: 1.4rem;
+  color: var(--muted);
+  transition: transform 0.2s ease;
+  flex-shrink: 0;
+}
+
+details[open] .questions-accordion__icon {
+  transform: rotate(180deg);
+}
+
+.questions-accordion .question-bank-list {
+  padding-top: 8px;
+}
+
 .catalog-course {
   display: grid;
   gap: 8px;
