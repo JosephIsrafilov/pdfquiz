@@ -152,11 +152,15 @@ def create_quiz_from_room(code: str, language: str, user_id=None):
         raise ValueError("Invalid or inactive room code.")
     
     topic_ids = json.loads(room["topic_ids_json"])
+    count = room["question_count"] or 10
+    difficulty_val = room["difficulty"] or "all"
+    if difficulty_val not in ALLOWED_DIFFICULTIES:
+        difficulty_val = "all"
     quiz_data = create_quiz(
         topic_ids=topic_ids,
-        count=room["question_count"],
+        count=int(count),
         language=language,
-        difficulty=room["difficulty"] or "all",
+        difficulty=difficulty_val,
         user_id=user_id,
         room_id=room["id"]
     )

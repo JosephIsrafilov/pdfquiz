@@ -54,7 +54,7 @@ def register_api_routes(app):
                 language=str(payload.get("language", "en")),
                 user_id=session.get("user_id"),
             )
-        except ValueError as error:
+        except (TypeError, ValueError) as error:
             return jsonify({"error": str(error)}), 400
         return jsonify(quiz), 201
 

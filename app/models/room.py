@@ -46,7 +46,7 @@ def fetch_rooms_for_admin(admin_id=None):
 def fetch_room_by_code(code):
     with get_db_connection() as connection:
         cursor = db_execute(connection, """
-            SELECT * FROM rooms WHERE code = %s AND is_active = 1
+            SELECT * FROM rooms WHERE code = %s AND is_active = TRUE
         """, (code,))
         return cursor.fetchone()
 
