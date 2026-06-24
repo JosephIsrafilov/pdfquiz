@@ -1,7 +1,14 @@
 import json
+from datetime import datetime
 from typing import Iterable, Optional
 
 from app.database import USING_POSTGRES, db_execute, get_db_connection
+
+
+def get_active_pool():
+    week_number = datetime.now().isocalendar()[1]
+    pools = ["pool_A", "pool_B", "pool_C"]
+    return pools[week_number % 3]
 
 
 def _insert_and_get_id(connection, query: str, params) -> int:
@@ -92,6 +99,9 @@ def fetch_questions_for_topics(
     if difficulty and difficulty != "all":
         conditions.append("q.difficulty = %s")
         params.append(difficulty)
+    active_pool = get_active_pool()
+    conditions.append("(q.pool = %s OR q.pool IS NULL)")
+    params.append(active_pool)
     with get_db_connection() as connection:
         return db_execute(connection, f"""
             SELECT q.id, q.topic_id, q.text_en, q.text_ru, q.options_json,
@@ -182,28 +192,52 @@ def create_question(
     option_rationales: Optional[dict] = None,
     difficulty: str = "beginner",
     question_type: str = "mcq",
+    pool: Optional[str] = None,
 ):
     with get_db_connection() as connection:
-        question_id = _insert_and_get_id(
-            connection,
-            """
-            INSERT INTO questions (
-                topic_id, text_en, text_ru, options_json,
-                explanation_en, explanation_ru, option_rationales_json, difficulty, question_type
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-            """,
-            (
-                topic_id,
-                text_en.strip(),
-                text_ru.strip(),
-                json.dumps(options, ensure_ascii=False),
-                explanation_en.strip(),
-                explanation_ru.strip(),
-                json.dumps(option_rationales or {}, ensure_ascii=False),
-                difficulty,
-                question_type,
-            ),
-        )
+        if pool:
+            question_id = _insert_and_get_id(
+                connection,
+                """
+                INSERT INTO questions (
+                    topic_id, text_en, text_ru, options_json,
+                    explanation_en, explanation_ru, option_rationales_json, difficulty, question_type, pool
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """,
+                (
+                    topic_id,
+                    text_en.strip(),
+                    text_ru.strip(),
+                    json.dumps(options, ensure_ascii=False),
+                    explanation_en.strip(),
+                    explanation_ru.strip(),
+                    json.dumps(option_rationales or {}, ensure_ascii=False),
+                    difficulty,
+                    question_type,
+                    pool,
+                ),
+            )
+        else:
+            question_id = _insert_and_get_id(
+                connection,
+                """
+                INSERT INTO questions (
+                    topic_id, text_en, text_ru, options_json,
+                    explanation_en, explanation_ru, option_rationales_json, difficulty, question_type
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """,
+                (
+                    topic_id,
+                    text_en.strip(),
+                    text_ru.strip(),
+                    json.dumps(options, ensure_ascii=False),
+                    explanation_en.strip(),
+                    explanation_ru.strip(),
+                    json.dumps(option_rationales or {}, ensure_ascii=False),
+                    difficulty,
+                    question_type,
+                ),
+            )
         connection.commit()
         return question_id
 
@@ -219,25 +253,46 @@ def update_question(
     option_rationales: Optional[dict],
     difficulty: str,
     question_type: str = "mcq",
+    pool: Optional[str] = None,
 ):
     with get_db_connection() as connection:
-        db_execute(connection, """
-            UPDATE questions
-            SET topic_id = %s, text_en = %s, text_ru = %s, options_json = %s,
-                explanation_en = %s, explanation_ru = %s, option_rationales_json = %s, difficulty = %s, question_type = %s
-            WHERE id = %s
-        """, (
-            topic_id,
-            text_en.strip(),
-            text_ru.strip(),
-            json.dumps(options, ensure_ascii=False),
-            explanation_en.strip(),
-            explanation_ru.strip(),
-            json.dumps(option_rationales or {}, ensure_ascii=False),
-            difficulty,
-            question_type,
-            question_id,
-        ))
+        if pool:
+            db_execute(connection, """
+                UPDATE questions
+                SET topic_id = %s, text_en = %s, text_ru = %s, options_json = %s,
+                    explanation_en = %s, explanation_ru = %s, option_rationales_json = %s, difficulty = %s, question_type = %s, pool = %s
+                WHERE id = %s
+            """, (
+                topic_id,
+                text_en.strip(),
+                text_ru.strip(),
+                json.dumps(options, ensure_ascii=False),
+                explanation_en.strip(),
+                explanation_ru.strip(),
+                json.dumps(option_rationales or {}, ensure_ascii=False),
+                difficulty,
+                question_type,
+                pool,
+                question_id,
+            ))
+        else:
+            db_execute(connection, """
+                UPDATE questions
+                SET topic_id = %s, text_en = %s, text_ru = %s, options_json = %s,
+                    explanation_en = %s, explanation_ru = %s, option_rationales_json = %s, difficulty = %s, question_type = %s
+                WHERE id = %s
+            """, (
+                topic_id,
+                text_en.strip(),
+                text_ru.strip(),
+                json.dumps(options, ensure_ascii=False),
+                explanation_en.strip(),
+                explanation_ru.strip(),
+                json.dumps(option_rationales or {}, ensure_ascii=False),
+                difficulty,
+                question_type,
+                question_id,
+            ))
         connection.commit()
 
 
@@ -377,12 +432,14 @@ def synchronize_python_curriculum():
                     question.get("explanation_ru")
                     or _teaching_explanation(topic, question, "ru")
                 )
-                
+
                 option_rationales = {
                     "en": question.get("option_rationales_en", {}),
                     "ru": question.get("option_rationales_ru", {})
                 }
-                
+
+                pool = question.get("pool")
+
                 existing_question = db_execute(
                     connection,
                     "SELECT id FROM questions WHERE curriculum_key = %s",
@@ -400,18 +457,35 @@ def synchronize_python_curriculum():
                     question.get("question_type", "mcq"),
                 )
                 if existing_question:
-                    db_execute(connection, """
-                        UPDATE questions
-                        SET topic_id = %s, text_en = %s, text_ru = %s,
-                            options_json = %s, explanation_en = %s,
-                            explanation_ru = %s, option_rationales_json = %s, difficulty = %s, question_type = %s
-                        WHERE id = %s
-                    """, (*values, existing_question["id"]))
+                    if pool:
+                        db_execute(connection, """
+                            UPDATE questions
+                            SET topic_id = %s, text_en = %s, text_ru = %s,
+                                options_json = %s, explanation_en = %s,
+                                explanation_ru = %s, option_rationales_json = %s, difficulty = %s, question_type = %s, pool = %s
+                            WHERE id = %s
+                        """, (*values, pool, existing_question["id"]))
+                    else:
+                        db_execute(connection, """
+                            UPDATE questions
+                            SET topic_id = %s, text_en = %s, text_ru = %s,
+                                options_json = %s, explanation_en = %s,
+                                explanation_ru = %s, option_rationales_json = %s, difficulty = %s, question_type = %s
+                            WHERE id = %s
+                        """, (*values, existing_question["id"]))
                 else:
-                    db_execute(connection, """
-                        INSERT INTO questions (
-                            topic_id, text_en, text_ru, options_json,
-                            explanation_en, explanation_ru, option_rationales_json, difficulty, question_type, curriculum_key
-                        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                    """, (*values, question_key))
+                    if pool:
+                        db_execute(connection, """
+                            INSERT INTO questions (
+                                topic_id, text_en, text_ru, options_json,
+                                explanation_en, explanation_ru, option_rationales_json, difficulty, question_type, curriculum_key, pool
+                            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        """, (*values, question_key, pool))
+                    else:
+                        db_execute(connection, """
+                            INSERT INTO questions (
+                                topic_id, text_en, text_ru, options_json,
+                                explanation_en, explanation_ru, option_rationales_json, difficulty, question_type, curriculum_key
+                            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        """, (*values, question_key))
         connection.commit()

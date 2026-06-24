@@ -11,6 +11,7 @@ from app.models.knowledge import (
     fetch_catalog,
     fetch_question,
     fetch_questions_for_admin,
+    get_active_pool,
     toggle_question,
     update_question,
 )
@@ -68,6 +69,7 @@ def _parse_question_form():
     difficulty = request.form.get("difficulty", "beginner")
     if difficulty not in DIFFICULTIES:
         difficulty = "beginner"
+    pool = request.form.get("pool", "").strip() or None
     return {
         "topic_id": topic_id,
         "text_en": text_en,
@@ -76,6 +78,7 @@ def _parse_question_form():
         "explanation_en": request.form.get("explanation_en", "").strip(),
         "explanation_ru": request.form.get("explanation_ru", "").strip(),
         "difficulty": difficulty,
+        "pool": pool,
     }
 
 
@@ -107,6 +110,7 @@ def register_admin_routes(app):
             users=[dict(row) for row in fetch_users()],
             rooms=[dict(row) for row in fetch_rooms_for_admin()],
             groups=[dict(row) for row in fetch_groups_for_admin()],
+            active_pool=get_active_pool(),
             error=request.args.get("error"),
             success=request.args.get("success"),
         )

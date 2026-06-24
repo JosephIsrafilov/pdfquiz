@@ -38,6 +38,9 @@
       <section class="panel" id="question-editor">
         <div class="section-head">
           <p class="step-label">TEACHER WORKSPACE</p>
+          <h2>Manage questions</h2>
+          <p style="color: var(--amber); font-weight: 600; margin-top: 0.5rem;">Active pool: {{ active_pool }} (rotates weekly)</p>
+        </div>
           <h1>Question bank</h1>
           <p>Create the course structure first, then add bilingual questions or import existing material into a topic.</p>
         </div>
@@ -108,6 +111,15 @@
               <select class="select-input" name="difficulty">
                 {% for level in ['beginner', 'intermediate', 'advanced'] %}
                 <option value="{{ level }}" {% if q and q.difficulty == level %}selected{% endif %}>{{ level|title }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div>
+              <label class="control-label">Pool</label>
+              <select class="select-input" name="pool">
+                <option value="">None (always visible)</option>
+                {% for pool_name in ['pool_A', 'pool_B', 'pool_C'] %}
+                <option value="{{ pool_name }}" {% if q and q.pool == pool_name %}selected{% endif %}>{{ pool_name }}</option>
                 {% endfor %}
               </select>
             </div>

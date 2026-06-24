@@ -114,8 +114,8 @@ OPTION_TRANSLATIONS_RU = {
 }
 
 
-def _q(level, text_en, text_ru, correct, wrong, explanation_en="", explanation_ru="", option_rationales_en=None, option_rationales_ru=None):
-    return {
+def _q(level, text_en, text_ru, correct, wrong, explanation_en="", explanation_ru="", option_rationales_en=None, option_rationales_ru=None, pool=None):
+    result = {
         "difficulty": level,
         "text_en": text_en,
         "text_ru": text_ru,
@@ -126,6 +126,9 @@ def _q(level, text_en, text_ru, correct, wrong, explanation_en="", explanation_r
         "option_rationales_en": option_rationales_en or {},
         "option_rationales_ru": option_rationales_ru or {},
     }
+    if pool:
+        result["pool"] = pool
+    return result
 
 
 PYTHON_TOPICS = [

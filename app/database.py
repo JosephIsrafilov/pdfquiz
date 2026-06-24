@@ -179,6 +179,52 @@ def init_db():
                     expires_at TIMESTAMP
                 )
             """)
+            connection.execute("""
+                CREATE TABLE IF NOT EXISTS user_question_history (
+                    id SERIAL PRIMARY KEY,
+                    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                    question_id INTEGER NOT NULL REFERENCES questions(id) ON DELETE CASCADE,
+                    seen_at TIMESTAMP DEFAULT NOW(),
+                    was_correct BOOLEAN
+                )
+            """)
+            connection.execute("""
+                CREATE TABLE IF NOT EXISTS question_templates (
+                    id SERIAL PRIMARY KEY,
+                    topic_id INTEGER REFERENCES topics(id) ON DELETE CASCADE,
+                    template_key VARCHAR(100) UNIQUE,
+                    template_en TEXT,
+                    template_ru TEXT,
+                    variables_spec_json TEXT,
+                    answer_expression TEXT,
+                    difficulty VARCHAR(50),
+                    question_type VARCHAR(50) DEFAULT 'mcq',
+                    is_active BOOLEAN DEFAULT TRUE,
+                    created_at TIMESTAMP DEFAULT NOW()
+                )
+            """)
+            connection.execute("""
+                CREATE TABLE IF NOT EXISTS user_topic_mastery (
+                    id SERIAL PRIMARY KEY,
+                    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+                    topic_id INTEGER REFERENCES topics(id) ON DELETE CASCADE,
+                    difficulty VARCHAR(50),
+                    total_attempts INTEGER DEFAULT 0,
+                    correct_attempts INTEGER DEFAULT 0,
+                    mastery_score REAL DEFAULT 0.0,
+                    locked BOOLEAN DEFAULT FALSE,
+                    last_attempt_at TIMESTAMP,
+                    created_at TIMESTAMP DEFAULT NOW(),
+                    UNIQUE(user_id, topic_id, difficulty)
+                )
+            """)
+            connection.execute("""
+                CREATE INDEX IF NOT EXISTS idx_mastery_lookup ON user_topic_mastery(user_id, topic_id, difficulty)
+            """)
+            connection.execute("""
+                CREATE INDEX IF NOT EXISTS idx_user_question_history_lookup
+                ON user_question_history(user_id, question_id, seen_at DESC)
+            """)
             connection.commit()
             alters = [
                 "ALTER TABLE results ADD COLUMN IF NOT EXISTS attempt_json TEXT",
@@ -188,7 +234,21 @@ def init_db():
                 "ALTER TABLE questions ADD COLUMN IF NOT EXISTS question_type TEXT NOT NULL DEFAULT 'mcq'",
                 "ALTER TABLE quiz_sessions ADD COLUMN IF NOT EXISTS room_id INTEGER REFERENCES rooms(id) ON DELETE CASCADE",
                 "ALTER TABLE results ADD COLUMN IF NOT EXISTS room_id INTEGER REFERENCES rooms(id) ON DELETE CASCADE",
+                "ALTER TABLE quiz_sessions ADD COLUMN IF NOT EXISTS checked_questions_json TEXT DEFAULT '[]'",
+                "ALTER TABLE questions ADD COLUMN IF NOT EXISTS pool VARCHAR(20) DEFAULT 'pool_A'",
+                "ALTER TABLE quiz_sessions ADD COLUMN IF NOT EXISTS generated_questions_json TEXT DEFAULT '[]'",
             ]
+            for query in alters:
+                try:
+                    connection.execute(query)
+                    connection.commit()
+                except Exception:
+                    connection.rollback()
+            try:
+                connection.execute("CREATE INDEX IF NOT EXISTS idx_questions_pool ON questions(pool)")
+                connection.commit()
+            except Exception:
+                connection.rollback()
             for query in alters:
                 try:
                     connection.execute(query)
@@ -314,6 +374,52 @@ def init_db():
                     expires_at TIMESTAMP
                 )
             """)
+            connection.execute("""
+                CREATE TABLE IF NOT EXISTS user_question_history (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                    question_id INTEGER NOT NULL REFERENCES questions(id) ON DELETE CASCADE,
+                    seen_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    was_correct INTEGER
+                )
+            """)
+            connection.execute("""
+                CREATE TABLE IF NOT EXISTS question_templates (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    topic_id INTEGER REFERENCES topics(id) ON DELETE CASCADE,
+                    template_key VARCHAR(100) UNIQUE,
+                    template_en TEXT,
+                    template_ru TEXT,
+                    variables_spec_json TEXT,
+                    answer_expression TEXT,
+                    difficulty VARCHAR(50),
+                    question_type VARCHAR(50) DEFAULT 'mcq',
+                    is_active INTEGER DEFAULT 1,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            connection.execute("""
+                CREATE TABLE IF NOT EXISTS user_topic_mastery (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+                    topic_id INTEGER REFERENCES topics(id) ON DELETE CASCADE,
+                    difficulty VARCHAR(50),
+                    total_attempts INTEGER DEFAULT 0,
+                    correct_attempts INTEGER DEFAULT 0,
+                    mastery_score REAL DEFAULT 0.0,
+                    locked INTEGER DEFAULT 0,
+                    last_attempt_at TIMESTAMP,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(user_id, topic_id, difficulty)
+                )
+            """)
+            connection.execute("""
+                CREATE INDEX IF NOT EXISTS idx_mastery_lookup ON user_topic_mastery(user_id, topic_id, difficulty)
+            """)
+            connection.execute("""
+                CREATE INDEX IF NOT EXISTS idx_user_question_history_lookup
+                ON user_question_history(user_id, question_id, seen_at DESC)
+            """)
             connection.commit()
             sqlite_alters = [
                 "ALTER TABLE results ADD COLUMN attempt_json TEXT",
@@ -323,6 +429,9 @@ def init_db():
                 "ALTER TABLE questions ADD COLUMN question_type TEXT NOT NULL DEFAULT 'mcq'",
                 "ALTER TABLE quiz_sessions ADD COLUMN room_id INTEGER REFERENCES rooms(id) ON DELETE CASCADE",
                 "ALTER TABLE results ADD COLUMN room_id INTEGER REFERENCES rooms(id) ON DELETE CASCADE",
+                "ALTER TABLE quiz_sessions ADD COLUMN checked_questions_json TEXT DEFAULT '[]'",
+                "ALTER TABLE questions ADD COLUMN pool VARCHAR(20) DEFAULT 'pool_A'",
+                "ALTER TABLE quiz_sessions ADD COLUMN generated_questions_json TEXT DEFAULT '[]'",
             ]
             for query in sqlite_alters:
                 try:
@@ -330,4 +439,9 @@ def init_db():
                     connection.commit()
                 except Exception:
                     connection.rollback()
+            try:
+                connection.execute("CREATE INDEX IF NOT EXISTS idx_questions_pool ON questions(pool)")
+                connection.commit()
+            except Exception:
+                connection.rollback()
         connection.commit()
