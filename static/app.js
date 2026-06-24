@@ -49,6 +49,9 @@ const copy = {
     chooseAnswer: "Choose an answer first.",
     correct: "Correct.",
     incorrect: "Not quite. The correct answer is highlighted.",
+    excellent: "Excellent!",
+    good: "Good job!",
+    needsPractice: "Needs practice",
     explanation: "Explanation",
     yourAnswer: "Your answer",
     correctAnswer: "Correct answer",
@@ -73,6 +76,11 @@ const copy = {
     joinRoomTitle: "Join a Teacher's Room",
     joinRoomDesc: "If your teacher gave you a 6-digit code, enter it here to start your configured test.",
     joinRoomBtn: "Join Room",
+    resultCorrect: "Correct",
+    resultUnanswered: "Unanswered",
+    resultStatus: "Status",
+    resultSaved: "Saved",
+    resultGuest: "Guest",
   },
   ru: {
     theme: "Сменить тему",
@@ -122,6 +130,9 @@ const copy = {
     chooseAnswer: "Сначала выберите ответ.",
     correct: "Верно.",
     incorrect: "Есть ошибка. Правильный ответ подсвечен.",
+    excellent: "Отлично!",
+    good: "Хороший результат!",
+    needsPractice: "Нужно ещё потренироваться",
     explanation: "Объяснение",
     yourAnswer: "Ваш ответ",
     correctAnswer: "Правильный ответ",
@@ -146,6 +157,11 @@ const copy = {
     joinRoomTitle: "Присоединиться к комнате",
     joinRoomDesc: "Если преподаватель дал вам 6-значный код, введите его здесь.",
     joinRoomBtn: "Войти",
+    resultCorrect: "Верно",
+    resultUnanswered: "Без ответа",
+    resultStatus: "Статус",
+    resultSaved: "Сохранено",
+    resultGuest: "Гость",
   },
 };
 
@@ -190,6 +206,22 @@ function t(key, values = {}) {
     value = value.replace(`{${name}}`, replacement);
   });
   return value;
+}
+
+function themeLabel(theme) {
+  const labels = {
+    en: {
+      auto: "Theme: Auto",
+      dark: "Theme: Dark",
+      light: "Theme: Light",
+    },
+    ru: {
+      auto: "Тема: авто",
+      dark: "Тема: тёмная",
+      light: "Тема: светлая",
+    },
+  };
+  return labels[state.language][theme] || labels[state.language].auto;
 }
 
 function csrfToken() {
@@ -250,6 +282,7 @@ function applyTranslations() {
     quizTitle.textContent = state.questions.map((question) => question.topic).filter((value, index, all) => all.indexOf(value) === index).join(" + ");
     updateProgress();
   }
+  applyTheme(localStorage.getItem("theme") || "auto");
 }
 
 function renderCatalog() {
@@ -659,11 +692,11 @@ function triggerConfetti() {
 
 function renderResult(result, savedResult) {
   const scorePercent = result.score_percent || 0;
-  let gradeColor = scorePercent >= 80 ? '#10b981' : scorePercent >= 50 ? '#f59e0b' : '#ef4444';
-  let gradeMessage = scorePercent >= 80 ? (t("excellent") || "Excellent!") : scorePercent >= 50 ? (t("good") || "Good Job!") : (t("needs_practice") || "Needs Practice");
+  const gradeClass = scorePercent >= 80 ? "score-card--good" : scorePercent >= 50 ? "score-card--medium" : "score-card--low";
+  const gradeMessage = scorePercent >= 80 ? t("excellent") : scorePercent >= 50 ? t("good") : t("needsPractice");
 
   summaryBox.innerHTML = `
-    <div class="score-card" style="--score-color: ${gradeColor}">
+    <div class="score-card ${gradeClass}">
       <div class="score-circle">
         <svg viewBox="0 0 36 36" class="circular-chart">
           <path class="circle-bg"
@@ -681,19 +714,19 @@ function renderResult(result, savedResult) {
         </svg>
       </div>
       <div class="score-details">
-        <h2 class="score-message animate-slide-up" style="color: ${gradeColor}">${gradeMessage}</h2>
+        <h2 class="score-message animate-slide-up">${gradeMessage}</h2>
         <div class="score-stats">
           <div class="stat-item animate-slide-up" style="animation-delay: 0.1s">
             <strong>${result.correct} / ${result.total}</strong>
-            <span>Correct</span>
+            <span>${t("resultCorrect")}</span>
           </div>
           <div class="stat-item animate-slide-up" style="animation-delay: 0.2s">
             <strong>${result.unanswered}</strong>
-            <span>Unanswered</span>
+            <span>${t("resultUnanswered")}</span>
           </div>
           <div class="stat-item animate-slide-up" style="animation-delay: 0.3s">
-            <strong>${savedResult ? "Saved" : "Guest"}</strong>
-            <span>Status</span>
+            <strong>${savedResult ? t("resultSaved") : t("resultGuest")}</strong>
+            <span>${t("resultStatus")}</span>
           </div>
         </div>
       </div>
@@ -849,11 +882,18 @@ function applyFontSize(value) {
 }
 
 function applyTheme(theme) {
+  document.documentElement.classList.remove("dark-init", "light-init");
   document.body.classList.remove("dark", "light");
-  if (theme === "dark" || theme === "light") document.body.classList.add(theme);
+  if (theme === "dark" || theme === "light") {
+    document.documentElement.classList.add(`${theme}-init`);
+    document.body.classList.add(theme);
+  }
   document.querySelectorAll(".theme-toggle").forEach((button) => {
     button.textContent = theme === "dark" ? "☀" : theme === "light" ? "☾" : "◐";
+    button.setAttribute("aria-label", themeLabel(theme));
+    button.setAttribute("title", themeLabel(theme));
   });
+  window.dispatchEvent(new CustomEvent("themechange", { detail: { theme } }));
 }
 
 document.querySelectorAll(".language-button").forEach((button) => {

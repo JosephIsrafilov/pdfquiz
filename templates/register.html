@@ -12,6 +12,13 @@
       href="{{ url_for('static', filename='styles.css') }}"
     />
     <meta name="csrf-token" content="{{ csrf_token() }}" />
+    <script>
+      (function () {
+        var saved = localStorage.getItem("theme");
+        if (saved === "dark") document.documentElement.classList.add("dark-init");
+        else if (saved === "light") document.documentElement.classList.add("light-init");
+      })();
+    </script>
   </head>
   <body>
     <div class="auth-layout">
@@ -20,9 +27,12 @@
           <span class="brand-mark">K</span>
           <span>Knowledge Check</span>
         </a>
-        <div class="language-switch auth-language">
-          <button class="language-button" type="button" data-language="en">EN</button>
-          <button class="language-button" type="button" data-language="ru">RU</button>
+        <div class="auth-toolbar">
+          <div class="language-switch auth-language">
+            <button class="language-button" type="button" data-language="en">EN</button>
+            <button class="language-button" type="button" data-language="ru">RU</button>
+          </div>
+          <button class="theme-toggle" type="button">Theme</button>
         </div>
         <h1 data-en="Create an account" data-ru="Создать аккаунт">Create an account</h1>
         <p class="subtitle" data-en="Your test history and mistake reviews will be stored in your account." data-ru="История тестов и разбор ошибок будут храниться в вашем аккаунте.">Your test history and mistake reviews will be stored in your account.</p>

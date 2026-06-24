@@ -14,6 +14,13 @@
       rel="stylesheet"
       href="{{ url_for('static', filename='styles.css') }}"
     />
+    <script>
+      (function () {
+        var saved = localStorage.getItem("theme");
+        if (saved === "dark") document.documentElement.classList.add("dark-init");
+        else if (saved === "light") document.documentElement.classList.add("light-init");
+      })();
+    </script>
   </head>
   <body>
     <div class="app">
@@ -27,6 +34,7 @@
             <button class="language-button" type="button" data-language="en">EN</button>
             <button class="language-button" type="button" data-language="ru">RU</button>
           </div>
+          <button class="theme-toggle" type="button">Theme</button>
           <a class="button" href="{{ url_for('profile') }}" data-en="Back to profile" data-ru="Назад в профиль">Back to profile</a>
           <a class="button" href="{{ url_for('index') }}" data-en="Back to tests" data-ru="К тестам">Back to tests</a>
         </div>

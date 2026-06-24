@@ -9,6 +9,13 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}" />
     <meta name="csrf-token" content="{{ csrf_token() }}" />
+    <script>
+      (function () {
+        var saved = localStorage.getItem("theme");
+        if (saved === "dark") document.documentElement.classList.add("dark-init");
+        else if (saved === "light") document.documentElement.classList.add("light-init");
+      })();
+    </script>
   </head>
   <body>
     <div class="app">
@@ -18,6 +25,7 @@
           <span>Knowledge Check</span>
         </a>
         <div class="topbar-actions">
+          <button class="theme-toggle" type="button">Theme</button>
           <span class="user-pill">{{ current_user.username }} <strong>admin</strong></span>
           <a class="button" href="{{ url_for('index') }}">Student view</a>
           <form method="post" action="{{ url_for('logout') }}">
@@ -215,7 +223,7 @@
                 </optgroup>
               {% endfor %}
             </select>
-            <small style="color: #6b7280; display: block; margin-bottom: 12px; margin-top: -8px;">Hold Ctrl/Cmd to select multiple.</small>
+            <small class="helper-text">Hold Ctrl/Cmd to select multiple.</small>
 
             <div class="bilingual-grid">
               <div>
@@ -249,11 +257,11 @@
           <div class="section-head"><h2>Active Rooms</h2></div>
           <div class="admin-list">
             {% for room in rooms %}
-            <article class="admin-item" style="display: flex; justify-content: space-between; align-items: flex-start; padding: 12px; border: 1px solid #e5e7eb; border-radius: 6px; margin-bottom: 8px;">
+            <article class="admin-item admin-item--stacked">
               <div>
-                <strong style="font-size: 1.1em; display: inline-block; vertical-align: middle;">{{ room.title }}</strong>
-                <span style="font-family: monospace; background: #4f46e5; color: white; padding: 2px 6px; border-radius: 4px; margin-left: 8px; font-weight: bold; vertical-align: middle;">{{ room.code }}</span>
-                <div style="font-size: 0.9em; color: #6b7280; margin-top: 4px;">
+                <strong>{{ room.title }}</strong>
+                <span class="inline-code-badge inline-code-badge--primary">{{ room.code }}</span>
+                <div class="item-meta">
                   Created by {{ room.creator_name }} • {{ room.question_count }} Qs 
                   {% if room.difficulty %}• {{ room.difficulty|title }}{% endif %}
                 </div>
@@ -291,11 +299,11 @@
           <div class="section-head"><h2>Active Groups</h2></div>
           <div class="admin-list">
             {% for group in groups %}
-            <article class="admin-item" style="display: flex; justify-content: space-between; align-items: flex-start; padding: 12px; border: 1px solid #e5e7eb; border-radius: 6px; margin-bottom: 8px;">
+            <article class="admin-item admin-item--stacked">
               <div>
-                <strong style="font-size: 1.1em; display: inline-block; vertical-align: middle;">{{ group.name }}</strong>
-                <span style="font-family: monospace; background: #10b981; color: white; padding: 2px 6px; border-radius: 4px; margin-left: 8px; font-weight: bold; vertical-align: middle;">{{ group.code }}</span>
-                <div style="font-size: 0.9em; color: #6b7280; margin-top: 4px;">
+                <strong>{{ group.name }}</strong>
+                <span class="inline-code-badge inline-code-badge--success">{{ group.code }}</span>
+                <div class="item-meta">
                   Created by {{ group.created_by_name }} • {{ group.member_count }} Students
                 </div>
               </div>
@@ -328,5 +336,6 @@
         </div>
       </section>
     </div>
+    <script src="{{ url_for('static', filename='page-i18n.js') }}"></script>
   </body>
 </html>

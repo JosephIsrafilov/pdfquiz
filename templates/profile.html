@@ -14,6 +14,13 @@
       rel="stylesheet"
       href="{{ url_for('static', filename='styles.css') }}"
     />
+    <script>
+      (function () {
+        var saved = localStorage.getItem("theme");
+        if (saved === "dark") document.documentElement.classList.add("dark-init");
+        else if (saved === "light") document.documentElement.classList.add("light-init");
+      })();
+    </script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   </head>
   <body>
@@ -28,6 +35,7 @@
             <button class="language-button" type="button" data-language="en">EN</button>
             <button class="language-button" type="button" data-language="ru">RU</button>
           </div>
+          <button class="theme-toggle" type="button">Theme</button>
           <span class="user-pill">
             {{ current_user.username }}
             {% if current_user.is_admin %}
@@ -57,23 +65,23 @@
           <h2 data-en="Mastery Stats" data-ru="Статистика">Mastery Stats</h2>
           <p data-en="Your overall progress on the platform." data-ru="Ваш общий прогресс на платформе.">Your overall progress on the platform.</p>
         </div>
-        <div class="stats-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 32px;">
-          <div class="stat-card" style="background: #f9fafb; padding: 24px; border-radius: 8px; border: 1px solid #e5e7eb; text-align: center;">
-            <div style="font-size: 2em; font-weight: 700; color: #111827;">{{ stats.total_tests }}</div>
-            <div style="color: #6b7280; font-size: 0.9em; font-weight: 500;" data-en="Tests Completed" data-ru="Пройдено тестов">Tests Completed</div>
+        <div class="stats-grid stats-grid--cards">
+          <div class="stat-card">
+            <div class="stat-card__value">{{ stats.total_tests }}</div>
+            <div class="stat-card__label" data-en="Tests Completed" data-ru="Пройдено тестов">Tests Completed</div>
           </div>
-          <div class="stat-card" style="background: #f9fafb; padding: 24px; border-radius: 8px; border: 1px solid #e5e7eb; text-align: center;">
-            <div style="font-size: 2em; font-weight: 700; color: #111827;">{{ stats.total_questions }}</div>
-            <div style="color: #6b7280; font-size: 0.9em; font-weight: 500;" data-en="Questions Answered" data-ru="Вопросов решено">Questions Answered</div>
+          <div class="stat-card">
+            <div class="stat-card__value">{{ stats.total_questions }}</div>
+            <div class="stat-card__label" data-en="Questions Answered" data-ru="Вопросов решено">Questions Answered</div>
           </div>
-          <div class="stat-card" style="background: #f9fafb; padding: 24px; border-radius: 8px; border: 1px solid #e5e7eb; text-align: center;">
-            <div style="font-size: 2em; font-weight: 700; color: #4f46e5;">{{ stats.average_score }}%</div>
-            <div style="color: #6b7280; font-size: 0.9em; font-weight: 500;" data-en="Average Score" data-ru="Средний балл">Average Score</div>
+          <div class="stat-card">
+            <div class="stat-card__value stat-card__value--accent">{{ stats.average_score }}%</div>
+            <div class="stat-card__label" data-en="Average Score" data-ru="Средний балл">Average Score</div>
           </div>
         </div>
 
         {% if stats.total_tests > 0 %}
-        <div style="width: 100%; max-width: 800px; margin: 0 auto 48px;">
+        <div class="chart-wrap">
           <canvas id="progressChart" width="800" height="300"></canvas>
         </div>
         {% endif %}
@@ -81,16 +89,16 @@
         {% if error %}<div class="form-alert">{{ error }}</div>{% endif %}
         {% if success %}<div class="form-success">{{ success }}</div>{% endif %}
 
-        <div class="section-head" style="margin-top: 48px;">
+        <div class="section-head topic-heading">
           <h2 data-en="My Groups" data-ru="Мои группы">My Groups</h2>
           <p data-en="Join a group to connect your progress with your teacher." data-ru="Вступите в группу, чтобы преподаватель видел ваш прогресс.">Join a group to connect your progress with your teacher.</p>
         </div>
-        <div class="stats-grid" style="display: grid; grid-template-columns: 1fr 2fr; gap: 32px; margin-bottom: 48px;">
-          <div style="background: #f9fafb; padding: 24px; border-radius: 8px; border: 1px solid #e5e7eb;">
-            <h3 style="margin-top: 0; margin-bottom: 16px; font-size: 1.1em;" data-en="Join Group" data-ru="Вступить в группу">Join Group</h3>
+        <div class="stats-grid stats-grid--split">
+          <div class="surface-card">
+            <h3 class="surface-card__title" data-en="Join Group" data-ru="Вступить в группу">Join Group</h3>
             <form method="post" action="{{ url_for('profile_join_group') }}">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
-              <input class="text-input" name="code" placeholder="6-digit code" required style="width: 100%; margin-bottom: 12px; font-family: monospace; text-transform: uppercase;" />
+              <input class="text-input text-monospace" name="code" placeholder="6-digit code" required style="margin-bottom: 12px; text-transform: uppercase;" />
               <button class="button button--primary" type="submit" style="width: 100%;" data-en="Join" data-ru="Присоединиться">Join</button>
             </form>
           </div>
@@ -98,14 +106,14 @@
             {% if user_groups %}
               <div class="admin-list">
                 {% for group in user_groups %}
-                <article class="admin-item" style="padding: 16px; border: 1px solid #e5e7eb; border-radius: 6px; margin-bottom: 8px;">
-                  <strong style="font-size: 1.1em; display: block; margin-bottom: 4px;">{{ group.name }}</strong>
-                  <div style="font-size: 0.9em; color: #6b7280;">Teacher: {{ group.teacher_name }} • Joined: {{ group.joined_at.split(' ')[0] if group.joined_at else 'N/A' }}</div>
+                <article class="admin-item admin-item--stacked">
+                  <strong>{{ group.name }}</strong>
+                  <div class="item-meta">Teacher: {{ group.teacher_name }} • Joined: {{ group.joined_at.split(' ')[0] if group.joined_at else 'N/A' }}</div>
                 </article>
                 {% endfor %}
               </div>
             {% else %}
-              <div class="empty-state" style="height: 100%; display: flex; align-items: center; justify-content: center;" data-en="You haven't joined any groups yet." data-ru="Вы еще не состоите ни в одной группе.">
+              <div class="empty-state empty-state--fill" data-en="You haven't joined any groups yet." data-ru="Вы еще не состоите ни в одной группе.">
                 You haven't joined any groups yet.
               </div>
             {% endif %}
@@ -169,19 +177,16 @@
         });
 
         const ctx = document.getElementById('progressChart').getContext('2d');
-        new Chart(ctx, {
+        const chart = new Chart(ctx, {
           type: 'line',
           data: {
             labels: labels,
             datasets: [{
               label: 'Score %',
               data: scores,
-              borderColor: '#4f46e5',
-              backgroundColor: 'rgba(79, 70, 229, 0.1)',
               borderWidth: 2,
               fill: true,
               tension: 0.3,
-              pointBackgroundColor: '#4f46e5',
             }]
           },
           options: {
@@ -191,13 +196,50 @@
                 beginAtZero: true,
                 max: 100,
                 title: { display: true, text: 'Score %' }
-              }
+              },
+              x: {}
             },
             plugins: {
               legend: { display: false }
             }
           }
         });
+
+        function syncChartTheme() {
+          const styles = getComputedStyle(document.body);
+          const accent = styles.getPropertyValue('--accent-2').trim() || '#3b82f6';
+          const ink = styles.getPropertyValue('--ink').trim() || '#111827';
+          const muted = styles.getPropertyValue('--muted').trim() || '#6b7280';
+          const line = styles.getPropertyValue('--line').trim() || '#e5e7eb';
+
+          chart.data.datasets[0].borderColor = accent;
+          chart.data.datasets[0].backgroundColor = accent + '1A';
+          chart.data.datasets[0].pointBackgroundColor = accent;
+          chart.options.scales.y.ticks = {
+            ...(chart.options.scales.y.ticks || {}),
+            color: muted,
+          };
+          chart.options.scales.y.grid = {
+            ...(chart.options.scales.y.grid || {}),
+            color: line,
+          };
+          chart.options.scales.y.title = {
+            ...(chart.options.scales.y.title || {}),
+            color: ink,
+          };
+          chart.options.scales.x.ticks = {
+            ...(chart.options.scales.x.ticks || {}),
+            color: muted,
+          };
+          chart.options.scales.x.grid = {
+            ...(chart.options.scales.x.grid || {}),
+            color: line,
+          };
+          chart.update();
+        }
+
+        syncChartTheme();
+        window.addEventListener("themechange", syncChartTheme);
       });
       {% endif %}
     </script>
