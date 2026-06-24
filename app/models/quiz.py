@@ -116,10 +116,11 @@ def create_quiz(topic_ids, count: int, language: str, difficulty: str, user_id=N
             ],
         })
 
-        random.shuffle(public_questions)
-        question_ids = [question["id"] for question in public_questions]
+    random.shuffle(public_questions)
+    question_ids = [question["id"] for question in public_questions]
 
-        token = secrets.token_urlsafe(32)
+    token = secrets.token_urlsafe(32)
+    with get_db_connection() as connection:
         db_execute(connection, """
             INSERT INTO quiz_sessions (
                 token, user_id, language, question_order_json,
@@ -189,6 +190,7 @@ def _load_quiz_rows(quiz_session):
         rows = db_execute(connection, f"""
             SELECT q.id, q.topic_id, q.text_en, q.text_ru, q.options_json,
                    q.explanation_en, q.explanation_ru, q.option_rationales_json, q.difficulty,
+                   q.question_type,
                    t.title_en AS topic_title_en, t.title_ru AS topic_title_ru
             FROM questions q
             JOIN topics t ON t.id = q.topic_id
@@ -333,11 +335,16 @@ def check_quiz_question(token: str, question_id: int, selected, user_id=None):
     # Check if question already checked in this session
     checked_json = quiz_session.get("checked_questions_json") if hasattr(quiz_session, "get") else quiz_session["checked_questions_json"]
     checked = json.loads(checked_json or "[]")
-    if question_id in checked:
-        # Return cached result if already checked
-        cached = [q for q in checked if isinstance(q, dict) and q.get("id") == question_id]
-        if cached:
-            return cached[0]["result"]
+    cached = next(
+        (
+            item.get("result")
+            for item in checked
+            if isinstance(item, dict) and item.get("id") == question_id
+        ),
+        None,
+    )
+    if cached is not None:
+        return cached
 
     question_ids = json.loads(quiz_session["question_order_json"])
     if question_id not in question_ids:

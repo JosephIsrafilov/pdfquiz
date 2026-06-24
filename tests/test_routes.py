@@ -93,9 +93,16 @@ def test_index_loads(client):
 
 def test_topic_quiz_hides_answers_and_grades_on_server(client):
     from app.models.knowledge import fetch_catalog
+    from app.database import db_execute, get_db_connection
 
     catalog = fetch_catalog()
     topic_ids = [topic["id"] for topic in catalog[0]["topics"][:2]]
+    with get_db_connection() as connection:
+        session_count_before = db_execute(
+            connection,
+            "SELECT COUNT(*) FROM quiz_sessions",
+        ).fetchone()[0]
+
     resp = client.post(
         "/api/quizzes",
         json={
@@ -108,6 +115,12 @@ def test_topic_quiz_hides_answers_and_grades_on_server(client):
     assert resp.status_code == 201
     quiz = resp.get_json()
     assert len(quiz["questions"]) == 4
+    with get_db_connection() as connection:
+        session_count_after = db_execute(
+            connection,
+            "SELECT COUNT(*) FROM quiz_sessions",
+        ).fetchone()[0]
+    assert session_count_after == session_count_before + 1
     assert all(
         "is_correct" not in option
         for question in quiz["questions"]
@@ -125,6 +138,58 @@ def test_topic_quiz_hides_answers_and_grades_on_server(client):
     assert len(result["review"]) == 4
     assert all(item["correct_answers"] for item in result["review"])
     assert all(item["explanation"] for item in result["review"])
+
+
+def test_topic_quiz_submits_multi_select_question(client):
+    from app.models.knowledge import create_course, create_question, create_topic
+    from app.models.quiz import fetch_quiz_session
+
+    course_id = create_course("Route Test Course", "Route Test Course")
+    topic_id = create_topic(course_id, "Multi Select", "Multi Select")
+    question_id = create_question(
+        topic_id=topic_id,
+        text_en="Select the Python collection types.",
+        text_ru="Select the Python collection types.",
+        options=[
+            {"text_en": "list", "text_ru": "list", "is_correct": True},
+            {"text_en": "while", "text_ru": "while", "is_correct": False},
+            {"text_en": "dict", "text_ru": "dict", "is_correct": True},
+        ],
+        explanation_en="Lists and dictionaries are collection types.",
+        explanation_ru="Lists and dictionaries are collection types.",
+        difficulty="beginner",
+        question_type="multi_select",
+    )
+
+    resp = client.post(
+        "/api/quizzes",
+        json={
+            "topic_ids": [topic_id],
+            "count": 1,
+            "language": "en",
+            "difficulty": "all",
+        },
+    )
+    assert resp.status_code == 201
+    quiz = resp.get_json()
+    assert quiz["questions"][0]["question_type"] == "multi_select"
+
+    session = fetch_quiz_session(quiz["token"])
+    option_order = json.loads(session["option_orders_json"])[str(question_id)]
+    selected_display_indices = [
+        display_index
+        for display_index, original_index in enumerate(option_order)
+        if original_index in {0, 2}
+    ]
+    submitted = client.post(
+        f"/api/quizzes/{quiz['token']}/submit",
+        json={"answers": {str(question_id): selected_display_indices}},
+    )
+    assert submitted.status_code == 200
+    result = submitted.get_json()["result"]
+    assert result["total"] == 1
+    assert result["correct"] == 1
+    assert result["review"][0]["question_type"] == "multi_select"
 
 
 def test_empty_submit(client):

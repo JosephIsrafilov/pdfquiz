@@ -4,6 +4,16 @@ from typing import List, Optional
 from app.database import db_execute, get_db_connection
 
 
+def _is_missing_room_id_column(error: Exception) -> bool:
+    message = str(error).lower()
+    error_name = type(error).__name__.lower()
+    return "room_id" in message and (
+        "no column" in message
+        or "does not exist" in message
+        or "undefinedcolumn" in error_name
+    )
+
+
 def fetch_results_for_user(user_id: int, limit: int = 50):
     with get_db_connection() as connection:
         return db_execute(connection, """
@@ -51,17 +61,33 @@ def save_result(
     mistake_json = json.dumps(mistake_numbers)
     attempt_json = json.dumps(attempt_payload) if attempt_payload is not None else None
     with get_db_connection() as connection:
-        db_execute(connection, """
-            INSERT INTO results (
+        try:
+            db_execute(connection, """
+                INSERT INTO results (
+                    user_id, document_id, source_label, total_questions, quiz_size,
+                    graded, correct, unanswered, missing_answer_key,
+                    mistake_numbers_json, attempt_json, room_id
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """, (
                 user_id, document_id, source_label, total_questions, quiz_size,
                 graded, correct, unanswered, missing_answer_key,
-                mistake_numbers_json, attempt_json, room_id
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-        """, (
-            user_id, document_id, source_label, total_questions, quiz_size,
-            graded, correct, unanswered, missing_answer_key,
-            mistake_json, attempt_json, room_id,
-        ))
+                mistake_json, attempt_json, room_id,
+            ))
+        except Exception as error:
+            connection.rollback()
+            if not _is_missing_room_id_column(error):
+                raise
+            db_execute(connection, """
+                INSERT INTO results (
+                    user_id, document_id, source_label, total_questions, quiz_size,
+                    graded, correct, unanswered, missing_answer_key,
+                    mistake_numbers_json, attempt_json
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """, (
+                user_id, document_id, source_label, total_questions, quiz_size,
+                graded, correct, unanswered, missing_answer_key,
+                mistake_json, attempt_json,
+            ))
         connection.commit()
 
 
