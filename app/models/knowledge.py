@@ -99,9 +99,6 @@ def fetch_questions_for_topics(
     if difficulty and difficulty != "all":
         conditions.append("q.difficulty = %s")
         params.append(difficulty)
-    active_pool = get_active_pool()
-    conditions.append("(q.pool = %s OR q.pool IS NULL)")
-    params.append(active_pool)
     with get_db_connection() as connection:
         return db_execute(connection, f"""
             SELECT q.id, q.topic_id, q.text_en, q.text_ru, q.options_json,

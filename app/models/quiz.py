@@ -6,6 +6,7 @@ from datetime import datetime, timedelta, timezone
 
 from app.database import USING_POSTGRES, db_execute, get_db_connection
 from app.models.knowledge import fetch_questions_for_topics, fetch_topics_by_ids
+from app.models.question_history import get_weighted_question_sample, record_question_view
 
 
 ALLOWED_LANGUAGES = {"en", "ru"}
@@ -89,11 +90,13 @@ def create_quiz(topic_ids, count: int, language: str, difficulty: str, user_id=N
             f"Only {len(available_questions)} questions are available for this selection."
         )
 
-    selected = _balanced_sample(
-        available_questions,
-        normalized_topic_ids,
-        count,
-    )
+    with get_db_connection() as connection:
+        selected = get_weighted_question_sample(
+            connection,
+            user_id,
+            available_questions,
+            count,
+        )
     option_orders = {}
     public_questions = []
     for question in selected:
@@ -113,11 +116,10 @@ def create_quiz(topic_ids, count: int, language: str, difficulty: str, user_id=N
             ],
         })
 
-    random.shuffle(public_questions)
-    question_ids = [question["id"] for question in public_questions]
+        random.shuffle(public_questions)
+        question_ids = [question["id"] for question in public_questions]
 
-    token = secrets.token_urlsafe(32)
-    with get_db_connection() as connection:
+        token = secrets.token_urlsafe(32)
         db_execute(connection, """
             INSERT INTO quiz_sessions (
                 token, user_id, language, question_order_json,
@@ -328,6 +330,15 @@ def check_quiz_question(token: str, question_id: int, selected, user_id=None):
     if quiz_session["user_id"] is not None and quiz_session["user_id"] != user_id:
         raise PermissionError("This quiz belongs to another user.")
 
+    # Check if question already checked in this session
+    checked_json = quiz_session.get("checked_questions_json") if hasattr(quiz_session, "get") else quiz_session["checked_questions_json"]
+    checked = json.loads(checked_json or "[]")
+    if question_id in checked:
+        # Return cached result if already checked
+        cached = [q for q in checked if isinstance(q, dict) and q.get("id") == question_id]
+        if cached:
+            return cached[0]["result"]
+
     question_ids = json.loads(quiz_session["question_order_json"])
     if question_id not in question_ids:
         raise ValueError("Question is not part of this quiz.")
@@ -336,12 +347,30 @@ def check_quiz_question(token: str, question_id: int, selected, user_id=None):
     if question is None:
         raise ValueError("Question is no longer available.")
     option_orders = json.loads(quiz_session["option_orders_json"])
-    return _assess_question(
+    assessment = _assess_question(
         question,
         option_orders[str(question_id)],
         selected,
         quiz_session["language"],
     )
+
+    # Mark question as checked and record view for logged-in users
+    with get_db_connection() as connection:
+        checked_json = quiz_session.get("checked_questions_json") if hasattr(quiz_session, "get") else quiz_session["checked_questions_json"]
+        checked = json.loads(checked_json or "[]")
+        if isinstance(checked, list) and question_id not in [c if isinstance(c, int) else c.get("id") for c in checked]:
+            checked.append({"id": question_id, "result": assessment})
+            db_execute(
+                connection,
+                "UPDATE quiz_sessions SET checked_questions_json = %s WHERE token = %s",
+                (json.dumps(checked), token),
+            )
+            connection.commit()
+
+        if user_id:
+            record_question_view(connection, user_id, question_id, assessment["is_correct"])
+
+    return assessment
 
 
 def submit_quiz(token: str, answers, user_id=None):
@@ -381,6 +410,12 @@ def submit_quiz(token: str, answers, user_id=None):
             topic_stat["correct"] += 1
 
     with get_db_connection() as connection:
+        # Record question views for logged-in users
+        if user_id:
+            for question in rows:
+                assessment = next(r for r in review if r["question_id"] == question["id"])
+                record_question_view(connection, user_id, question["id"], assessment["is_correct"])
+
         db_execute(
             connection,
             "UPDATE quiz_sessions SET completed = TRUE WHERE token = %s",
