@@ -1,7 +1,7 @@
 import json
 from typing import List, Optional
 
-from app.database import db_execute, get_db_connection
+from app.database import USING_POSTGRES, db_execute, get_db_connection
 
 
 def _is_missing_room_id_column(error: Exception) -> bool:
@@ -57,17 +57,18 @@ def save_result(
     mistake_numbers: List[int],
     attempt_payload,
     room_id: Optional[int] = None,
-):
+) -> Optional[int]:
     mistake_json = json.dumps(mistake_numbers)
     attempt_json = json.dumps(attempt_payload) if attempt_payload is not None else None
+    returning = " RETURNING id" if USING_POSTGRES else ""
     with get_db_connection() as connection:
         try:
-            db_execute(connection, """
+            cursor = db_execute(connection, f"""
                 INSERT INTO results (
                     user_id, document_id, source_label, total_questions, quiz_size,
                     graded, correct, unanswered, missing_answer_key,
                     mistake_numbers_json, attempt_json, room_id
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s){returning}
             """, (
                 user_id, document_id, source_label, total_questions, quiz_size,
                 graded, correct, unanswered, missing_answer_key,
@@ -77,18 +78,22 @@ def save_result(
             connection.rollback()
             if not _is_missing_room_id_column(error):
                 raise
-            db_execute(connection, """
+            cursor = db_execute(connection, f"""
                 INSERT INTO results (
                     user_id, document_id, source_label, total_questions, quiz_size,
                     graded, correct, unanswered, missing_answer_key,
                     mistake_numbers_json, attempt_json
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s){returning}
             """, (
                 user_id, document_id, source_label, total_questions, quiz_size,
                 graded, correct, unanswered, missing_answer_key,
                 mistake_json, attempt_json,
             ))
         connection.commit()
+    if USING_POSTGRES:
+        row = cursor.fetchone()
+        return row[0] if row else None
+    return cursor.lastrowid
 
 
 def serialize_result(result):

@@ -23,11 +23,6 @@ def create_app():
     def validate_csrf():
         if request.method in ("GET", "HEAD", "OPTIONS", "TRACE"):
             return
-        if request.path.startswith("/api/"):
-            return
-        content_type = request.headers.get("Content-Type", "")
-        if "application/json" in content_type:
-            return
         token = request.form.get("csrf_token") or request.headers.get("X-CSRFToken")
         if not token or token != session.get("csrf_token"):
             abort(403)

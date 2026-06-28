@@ -5,7 +5,12 @@ from flask import jsonify, request, session
 
 from app.models.document import fetch_document
 from app.models.quiz import check_quiz_question, create_quiz, submit_quiz
-from app.models.result import fetch_results_for_user, save_result, serialize_result
+from app.models.result import (
+    fetch_result_for_user,
+    fetch_results_for_user,
+    save_result,
+    serialize_result,
+)
 from app.models.user import fetch_user_by_id
 from app.utils import login_required
 from app.parsing import parse_uploaded_file
@@ -102,7 +107,7 @@ def register_api_routes(app):
                 for index, item in enumerate(result["review"], start=1)
                 if not item["is_correct"]
             ]
-            save_result(
+            result_id = save_result(
                 user_id=session["user_id"],
                 document_id=None,
                 source_label=result["source_label"],
@@ -116,8 +121,8 @@ def register_api_routes(app):
                 attempt_payload=result["review"],
                 room_id=result.get("room_id"),
             )
-            latest = fetch_results_for_user(session["user_id"], limit=1)
-            saved_result = serialize_result(latest[0]) if latest else None
+            latest = fetch_result_for_user(result_id, session["user_id"]) if result_id else None
+            saved_result = serialize_result(latest) if latest else None
         return jsonify({"result": result, "saved_result": saved_result})
 
     @app.route("/api/parse", methods=["POST"], endpoint="parse_document")
@@ -175,7 +180,7 @@ def register_api_routes(app):
         if not required_keys.issubset(payload.keys()):
             return jsonify({"error": "Недостаточно данных для сохранения результата."}), 400
         user = fetch_user_by_id(session["user_id"])
-        save_result(
+        result_id = save_result(
             user_id=user["id"],
             document_id=payload.get("document_id"),
             source_label=str(payload["source_label"]),
@@ -188,5 +193,5 @@ def register_api_routes(app):
             mistake_numbers=[int(v) for v in payload.get("mistake_numbers", [])],
             attempt_payload=payload.get("attempt"),
         )
-        latest = fetch_results_for_user(user["id"], limit=1)
-        return jsonify({"ok": True, "result": serialize_result(latest[0]) if latest else None})
+        latest = fetch_result_for_user(result_id, user["id"]) if result_id else None
+        return jsonify({"ok": True, "result": serialize_result(latest) if latest else None})

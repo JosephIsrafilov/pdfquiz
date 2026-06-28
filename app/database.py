@@ -249,12 +249,6 @@ def init_db():
                 connection.commit()
             except Exception:
                 connection.rollback()
-            for query in alters:
-                try:
-                    connection.execute(query)
-                    connection.commit()
-                except Exception:
-                    connection.rollback()
         else:
             connection.execute("""
                 CREATE TABLE IF NOT EXISTS users (

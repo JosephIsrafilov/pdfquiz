@@ -174,11 +174,12 @@ def create_quiz_from_room(code: str, language: str, user_id=None):
 
 def fetch_quiz_session(token: str):
     with get_db_connection() as connection:
-        return db_execute(
+        row = db_execute(
             connection,
             "SELECT * FROM quiz_sessions WHERE token = %s",
             (token,),
         ).fetchone()
+        return dict(row) if row is not None else None
 
 
 def _load_quiz_rows(quiz_session):
@@ -333,8 +334,7 @@ def check_quiz_question(token: str, question_id: int, selected, user_id=None):
         raise PermissionError("This quiz belongs to another user.")
 
     # Check if question already checked in this session
-    checked_json = quiz_session.get("checked_questions_json") if hasattr(quiz_session, "get") else quiz_session["checked_questions_json"]
-    checked = json.loads(checked_json or "[]")
+    checked = json.loads(quiz_session.get("checked_questions_json") or "[]")
     cached = next(
         (
             item.get("result")
@@ -363,8 +363,7 @@ def check_quiz_question(token: str, question_id: int, selected, user_id=None):
 
     # Mark question as checked and record view for logged-in users
     with get_db_connection() as connection:
-        checked_json = quiz_session.get("checked_questions_json") if hasattr(quiz_session, "get") else quiz_session["checked_questions_json"]
-        checked = json.loads(checked_json or "[]")
+        checked = json.loads(quiz_session.get("checked_questions_json") or "[]")
         if isinstance(checked, list) and question_id not in [c if isinstance(c, int) else c.get("id") for c in checked]:
             checked.append({"id": question_id, "result": assessment})
             db_execute(
