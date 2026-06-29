@@ -179,29 +179,3 @@ def register_api_routes(app):
             "source_label": source_label,
         })
 
-    @app.route("/api/results", methods=["POST"], endpoint="save_quiz_result")
-    @login_required
-    def save_quiz_result():
-        payload = request.get_json(silent=True) or {}
-        required_keys = {
-            "source_label", "total_questions", "quiz_size", "graded", "correct",
-            "unanswered", "missing_answer_key", "mistake_numbers", "attempt",
-        }
-        if not required_keys.issubset(payload.keys()):
-            return jsonify({"error": "Недостаточно данных для сохранения результата."}), 400
-        user = fetch_user_by_id(session["user_id"])
-        result_id = save_result(
-            user_id=user["id"],
-            document_id=payload.get("document_id"),
-            source_label=str(payload["source_label"]),
-            total_questions=int(payload["total_questions"]),
-            quiz_size=int(payload["quiz_size"]),
-            graded=int(payload["graded"]),
-            correct=int(payload["correct"]),
-            unanswered=int(payload["unanswered"]),
-            missing_answer_key=int(payload["missing_answer_key"]),
-            mistake_numbers=[int(v) for v in payload.get("mistake_numbers", [])],
-            attempt_payload=payload.get("attempt"),
-        )
-        latest = fetch_result_for_user(result_id, user["id"]) if result_id else None
-        return jsonify({"ok": True, "result": serialize_result(latest) if latest else None})

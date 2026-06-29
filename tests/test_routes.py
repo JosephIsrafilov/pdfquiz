@@ -423,6 +423,17 @@ def test_api_parse_idor(client, app):
     assert resp.status_code == 403
 
 
+def test_api_results_removed(client):
+    """Ensure the score forgery endpoint is removed."""
+    client.post(
+        "/register",
+        data={"username": "forger", "password": "password", "password_repeat": "password"},
+        follow_redirects=True,
+    )
+    resp = client.post("/api/results", json={"correct": 999})
+    assert resp.status_code == 404
+
+
 # ---------------------------------------------------------------------------
 # Admin panel — access control
 # ---------------------------------------------------------------------------
