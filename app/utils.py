@@ -4,6 +4,37 @@ from functools import wraps
 from flask import abort, redirect, request, session, url_for
 
 
+UI_STRINGS = {
+    "en": {
+        "start": "Start",
+        "username": "Username",
+        "password": "Password",
+        "login": "Log in",
+        "register": "Register",
+        "logout": "Log out",
+        "profile": "Profile",
+        "your_profile": "YOUR PROFILE",
+        "teacher_panel": "Teacher panel",
+        "save": "Save",
+        "cancel": "Cancel",
+    },
+    "ru": {
+        "start": "Начать",
+        "username": "Имя пользователя",
+        "password": "Пароль",
+        "login": "Войти",
+        "register": "Регистрация",
+        "logout": "Выйти",
+        "profile": "Профиль",
+        "your_profile": "ВАШ ПРОФИЛЬ",
+        "teacher_panel": "Панель преподавателя",
+        "save": "Сохранить",
+        "cancel": "Отмена",
+    }
+}
+
+
+
 def generate_csrf_token():
     if "csrf_token" not in session:
         session["csrf_token"] = secrets.token_hex(32)
@@ -15,6 +46,9 @@ def validate_csrf():
         return
     token = request.form.get("csrf_token") or request.headers.get("X-CSRFToken")
     if not token or token != session.get("csrf_token"):
+        if request.path.startswith("/api/"):
+            from flask import jsonify
+            return jsonify({"error": "csrf_failed"}), 403
         abort(403)
 
 

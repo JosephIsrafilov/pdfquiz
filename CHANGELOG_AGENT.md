@@ -6,3 +6,5 @@
 - P0.5: Added security headers (nosniff, X-Frame-Options DENY, CSP, and HSTS in production). Removed leftover ngrok dev header.
 - P0.6: Applied rate limiting via Flask-Limiter to /login, /register, and /api/parse to prevent brute-force and resource abuse.
 - P1.1: Deleted legacy files web_app.py and refactor.py. Created Procfile to point to app:create_app().
+- P1.2: Used app.utils.validate_csrf and removed duplicate in app/__init__.py. Deleted dead code _balanced_sample from app/models/quiz.py. Added test for CSRF token requirement.
+- P1.3: Added a Makefile with lint, format, and test targets.

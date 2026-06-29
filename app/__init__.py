@@ -22,8 +22,22 @@ def create_app():
     app.config["SECRET_KEY"] = secret_key
     app.secret_key = secret_key
 
-    from app.utils import generate_csrf_token, validate_csrf
+    from app.utils import generate_csrf_token, validate_csrf, UI_STRINGS
     app.jinja_env.globals["csrf_token"] = generate_csrf_token
+    
+    @app.context_processor
+    def inject_ui_strings():
+        lang = session.get("lang", "en")
+        def t(key):
+            return UI_STRINGS.get(lang, UI_STRINGS["en"]).get(key, key)
+        return dict(ui=t, lang=lang)
+
+    @app.before_request
+    def set_language():
+        lang = request.args.get("lang")
+        if lang in ["en", "ru"]:
+            session["lang"] = lang
+
     app.before_request(validate_csrf)
 
     @app.after_request

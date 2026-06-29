@@ -137,43 +137,43 @@ def register_api_routes(app):
             try:
                 document_id = int(document_id_raw)
             except ValueError:
-                return jsonify({"error": "Некорректный документ"}), 400
+                return jsonify({"error": "invalid_document"}), 400
             document = fetch_document(document_id)
             if document is None:
-                return jsonify({"error": "Документ не найден"}), 404
+                return jsonify({"error": "document_not_found"}), 404
                 
             user = fetch_user_by_id(session["user_id"])
             if not user["is_admin"] and document["uploaded_by"] != user["id"]:
-                return jsonify({"error": "Forbidden"}), 403
+                return jsonify({"error": "forbidden"}), 403
                 
             try:
                 questions = json.loads(document["questions_json"])
             except json.JSONDecodeError:
-                return jsonify({"error": "Некорректный JSON"}), 400
+                return jsonify({"error": "invalid_json"}), 400
                 
             source_label = document["title"]
         else:
             if "file" not in request.files:
-                return jsonify({"error": "Файл не найден"}), 400
+                return jsonify({"error": "file_not_found"}), 400
             file = request.files["file"]
             if not file or not file.filename:
-                return jsonify({"error": "Файл не выбран"}), 400
+                return jsonify({"error": "file_not_selected"}), 400
             filename = file.filename.lower()
             if not filename.endswith((".pdf", ".docx", ".json")):
-                return jsonify({"error": "Поддерживаются только PDF, DOCX и JSON"}), 400
+                return jsonify({"error": "unsupported_file_type"}), 400
             try:
                 questions = parse_uploaded_file(filename, file)
                 source_label = file.filename
             except ValueError as error:
                 return jsonify({"error": str(error)}), 400
             except BadZipFile:
-                return jsonify({"error": "DOCX файл поврежден или имеет неверный формат"}), 400
+                return jsonify({"error": "docx_corrupted"}), 400
             except KeyError:
-                return jsonify({"error": "Не удалось прочитать структуру DOCX"}), 400
+                return jsonify({"error": "docx_structure_error"}), 400
             except Exception:
-                return jsonify({"error": "Не удалось прочитать файл"}), 500
+                return jsonify({"error": "file_read_error"}), 500
         if not questions:
-            return jsonify({"error": "Не удалось распознать вопросы"}), 400
+            return jsonify({"error": "no_questions_found"}), 400
         return jsonify({
             "count": len(questions),
             "questions": questions,
