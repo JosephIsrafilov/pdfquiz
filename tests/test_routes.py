@@ -311,7 +311,19 @@ def test_profile_loads_with_datetime_group_membership(client, monkeypatch):
 # ---------------------------------------------------------------------------
 
 
+def test_api_parse_unauthenticated(client):
+    with client.session_transaction() as sess:
+        sess.pop("user_id", None)
+    resp = client.post("/api/parse", data={})
+    assert resp.status_code in (401, 403)
+
+
 def test_api_parse_no_file_no_document(client):
+    client.post(
+        "/register",
+        data={"username": "parseuser1", "password": "password", "password_repeat": "password"},
+        follow_redirects=True,
+    )
     resp = client.post("/api/parse", data={})
     assert resp.status_code == 400
     data = resp.get_json()
@@ -319,6 +331,11 @@ def test_api_parse_no_file_no_document(client):
 
 
 def test_api_parse_invalid_document_id(client):
+    client.post(
+        "/register",
+        data={"username": "parseuser2", "password": "password", "password_repeat": "password"},
+        follow_redirects=True,
+    )
     resp = client.post("/api/parse", data={"document_id": "not-a-number"})
     assert resp.status_code == 400
     data = resp.get_json()
@@ -326,6 +343,11 @@ def test_api_parse_invalid_document_id(client):
 
 
 def test_api_parse_nonexistent_document(client):
+    client.post(
+        "/register",
+        data={"username": "parseuser3", "password": "password", "password_repeat": "password"},
+        follow_redirects=True,
+    )
     resp = client.post("/api/parse", data={"document_id": "99999"})
     assert resp.status_code == 404
     data = resp.get_json()
@@ -334,6 +356,11 @@ def test_api_parse_nonexistent_document(client):
 
 def test_api_parse_json_questions(client):
     """Upload a valid JSON question set directly."""
+    client.post(
+        "/register",
+        data={"username": "parseuser4", "password": "password", "password_repeat": "password"},
+        follow_redirects=True,
+    )
     questions = [
         {
             "text": "What is 2+2?",
@@ -354,9 +381,46 @@ def test_api_parse_json_questions(client):
 
 
 def test_api_parse_unsupported_extension(client):
+    client.post(
+        "/register",
+        data={"username": "parseuser5", "password": "password", "password_repeat": "password"},
+        follow_redirects=True,
+    )
     data = {"file": (io.BytesIO(b"text content"), "file.txt", "text/plain")}
     resp = client.post("/api/parse", data=data, content_type="multipart/form-data")
     assert resp.status_code == 400
+
+
+def test_api_parse_idor(client, app):
+    """Test that a user cannot parse another user's document."""
+    with app.app_context():
+        from app.models.user import create_user
+        from app.models.document import save_document
+        from app.database import get_db_connection, db_execute
+        
+        # Create victim user
+        victim_id = create_user("victim", "password")
+        if isinstance(victim_id, dict):
+            victim_id = victim_id["id"]
+        elif hasattr(victim_id, "keys"): # sqlite3.Row
+            victim_id = victim_id["id"]
+        # Create a document for victim
+        save_document("Victim Doc", "[]", victim_id)
+        
+        # Get the document ID
+        with get_db_connection() as conn:
+            doc_id = db_execute(conn, "SELECT id FROM documents WHERE uploaded_by = %s ORDER BY id DESC LIMIT 1", (victim_id,)).fetchone()["id"]
+
+    # Register and login as attacker
+    client.post(
+        "/register",
+        data={"username": "attacker", "password": "password", "password_repeat": "password"},
+        follow_redirects=True,
+    )
+    
+    # Attempt to parse victim's document
+    resp = client.post("/api/parse", data={"document_id": doc_id})
+    assert resp.status_code == 403
 
 
 # ---------------------------------------------------------------------------

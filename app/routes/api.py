@@ -126,6 +126,7 @@ def register_api_routes(app):
         return jsonify({"result": result, "saved_result": saved_result})
 
     @app.route("/api/parse", methods=["POST"], endpoint="parse_document")
+    @login_required
     def parse_document():
         document_id_raw = request.form.get("document_id", "").strip()
         source_label = "Загруженный файл"
@@ -138,7 +139,16 @@ def register_api_routes(app):
             document = fetch_document(document_id)
             if document is None:
                 return jsonify({"error": "Документ не найден"}), 404
-            questions = json.loads(document["questions_json"])
+                
+            user = fetch_user_by_id(session["user_id"])
+            if not user["is_admin"] and document["uploaded_by"] != user["id"]:
+                return jsonify({"error": "Forbidden"}), 403
+                
+            try:
+                questions = json.loads(document["questions_json"])
+            except json.JSONDecodeError:
+                return jsonify({"error": "Некорректный JSON"}), 400
+                
             source_label = document["title"]
         else:
             if "file" not in request.files:

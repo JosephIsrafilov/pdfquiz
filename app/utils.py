@@ -22,6 +22,9 @@ def login_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
         if "user_id" not in session:
+            if request.path.startswith("/api/"):
+                from flask import jsonify
+                return jsonify({"error": "Unauthorized"}), 401
             return redirect(url_for("login"))
         return f(*args, **kwargs)
     return decorated
@@ -32,9 +35,15 @@ def admin_required(f):
     def decorated(*args, **kwargs):
         from app.models.user import fetch_user_by_id
         if "user_id" not in session:
+            if request.path.startswith("/api/"):
+                from flask import jsonify
+                return jsonify({"error": "Unauthorized"}), 401
             return redirect(url_for("login"))
         user = fetch_user_by_id(session["user_id"])
         if not user or not user["is_admin"]:
+            if request.path.startswith("/api/"):
+                from flask import jsonify
+                return jsonify({"error": "Forbidden"}), 403
             abort(403)
         return f(*args, **kwargs)
     return decorated
