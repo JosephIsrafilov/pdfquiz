@@ -22,20 +22,9 @@ def create_app():
     app.config["SECRET_KEY"] = secret_key
     app.secret_key = secret_key
 
-    def generate_csrf_token():
-        if "csrf_token" not in session:
-            session["csrf_token"] = secrets.token_hex(32)
-        return session["csrf_token"]
-
+    from app.utils import generate_csrf_token, validate_csrf
     app.jinja_env.globals["csrf_token"] = generate_csrf_token
-
-    @app.before_request
-    def validate_csrf():
-        if request.method in ("GET", "HEAD", "OPTIONS", "TRACE"):
-            return
-        token = request.form.get("csrf_token") or request.headers.get("X-CSRFToken")
-        if not token or token != session.get("csrf_token"):
-            abort(403)
+    app.before_request(validate_csrf)
 
     @app.after_request
     def add_security_headers(response):

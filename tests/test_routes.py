@@ -37,6 +37,13 @@ def test_register_page_loads(client):
     assert resp.status_code == 200
 
 
+def test_csrf_protection_missing_token(app):
+    """Test that a POST without a CSRF token returns 403."""
+    client = app.test_client()
+    resp = client.post("/login", data={"username": "test", "password": "pwd"})
+    assert resp.status_code == 403
+
+
 def test_register_and_login(client):
     """Full cycle: register → login → redirect to index."""
     # Register

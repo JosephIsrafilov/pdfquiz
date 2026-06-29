@@ -40,28 +40,6 @@ def _localized_rationale(question, option, language: str) -> str:
         return ""
 
 
-def _balanced_sample(questions, topic_ids, count):
-    by_topic = defaultdict(list)
-    for question in questions:
-        by_topic[question["topic_id"]].append(question)
-    for pool in by_topic.values():
-        random.shuffle(pool)
-
-    selected = []
-    active_topics = [topic_id for topic_id in topic_ids if by_topic[topic_id]]
-    while len(selected) < count and active_topics:
-        next_round = []
-        for topic_id in active_topics:
-            if len(selected) >= count:
-                break
-            if by_topic[topic_id]:
-                selected.append(by_topic[topic_id].pop())
-            if by_topic[topic_id]:
-                next_round.append(topic_id)
-        active_topics = next_round
-    random.shuffle(selected)
-    return selected
-
 
 def create_quiz(topic_ids, count: int, language: str, difficulty: str, user_id=None, room_id=None):
     if language not in ALLOWED_LANGUAGES:

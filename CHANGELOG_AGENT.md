@@ -4,3 +4,5 @@
 - P0.3: Enforced strong SECRET_KEY at app startup. App raises RuntimeError in production if SECRET_KEY is weak or missing, preventing silent vulnerabilities.
 - P0.4: Set SESSION_COOKIE_HTTPONLY, SAMESITE, and SECURE flags in config to protect session cookies from XSS and CSRF.
 - P0.5: Added security headers (nosniff, X-Frame-Options DENY, CSP, and HSTS in production). Removed leftover ngrok dev header.
+- P0.6: Applied rate limiting via Flask-Limiter to /login, /register, and /api/parse to prevent brute-force and resource abuse.
+- P1.1: Deleted legacy files web_app.py and refactor.py. Created Procfile to point to app:create_app().
