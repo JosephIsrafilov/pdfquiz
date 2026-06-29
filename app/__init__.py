@@ -10,7 +10,17 @@ from app.database import init_db
 def create_app():
     app = Flask(__name__, template_folder="../templates", static_folder="../static")
     app.config.from_object(Config)
-    app.secret_key = Config.SECRET_KEY
+
+    secret_key = app.config.get("SECRET_KEY")
+    if not secret_key or secret_key == "change-this-secret-key":
+        if not app.debug and not app.testing:
+            raise RuntimeError("A strong SECRET_KEY must be set in production.")
+        else:
+            import logging
+            logging.warning("No SECRET_KEY set. Generating an ephemeral one for development.")
+            secret_key = secrets.token_hex(32)
+    app.config["SECRET_KEY"] = secret_key
+    app.secret_key = secret_key
 
     def generate_csrf_token():
         if "csrf_token" not in session:
