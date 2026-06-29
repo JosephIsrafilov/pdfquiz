@@ -8,3 +8,8 @@
 - P1.1: Deleted legacy files web_app.py and refactor.py. Created Procfile to point to app:create_app().
 - P1.2: Used app.utils.validate_csrf and removed duplicate in app/__init__.py. Deleted dead code _balanced_sample from app/models/quiz.py. Added test for CSRF token requirement.
 - P1.3: Added a Makefile with lint, format, and test targets.
+- P2.1, P2.2, P2.3: Used session.lang to set HTML lang attribute. Added UI_STRINGS translation dictionary to app/utils.py and injected 'ui' global variable to Jinja for server-side localization.
+- P2.4: Converted hardcoded Russian strings in parse_document to keys. Made validate_csrf return explicit JSON format on /api/ endpoints instead of HTML.
+- P3.2: Generated requirements.in and frozen requirements.txt via pip-tools to lock dependencies.
+- P3.3: Extracted hardcoded database schema logic in database.py into sequentially versioned migration scripts in the migrations/ folder (001_initial.py and 002_alters.py) for both Postgres and SQLite.
+- P3.4: Added .pre-commit-config.yaml for automated code formatting checks (flake8).
