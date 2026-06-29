@@ -1,15 +1,1 @@
-# Changelog
-- P0.1: Locked down `/api/parse` by adding `@login_required` decorator, handling invalid JSON safely to avoid 500 errors, adding a document ownership/admin check to prevent IDOR, and updating related tests.
-- P0.2: Deleted the /api/results endpoint because it accepted client-supplied unverified scores (score forgery), and was unused since static/app.js submits via another secure endpoint. Test added to ensure it returns 404.
-- P0.3: Enforced strong SECRET_KEY at app startup. App raises RuntimeError in production if SECRET_KEY is weak or missing, preventing silent vulnerabilities.
-- P0.4: Set SESSION_COOKIE_HTTPONLY, SAMESITE, and SECURE flags in config to protect session cookies from XSS and CSRF.
-- P0.5: Added security headers (nosniff, X-Frame-Options DENY, CSP, and HSTS in production). Removed leftover ngrok dev header.
-- P0.6: Applied rate limiting via Flask-Limiter to /login, /register, and /api/parse to prevent brute-force and resource abuse.
-- P1.1: Deleted legacy files web_app.py and refactor.py. Created Procfile to point to app:create_app().
-- P1.2: Used app.utils.validate_csrf and removed duplicate in app/__init__.py. Deleted dead code _balanced_sample from app/models/quiz.py. Added test for CSRF token requirement.
-- P1.3: Added a Makefile with lint, format, and test targets.
-- P2.1, P2.2, P2.3: Used session.lang to set HTML lang attribute. Added UI_STRINGS translation dictionary to app/utils.py and injected 'ui' global variable to Jinja for server-side localization.
-- P2.4: Converted hardcoded Russian strings in parse_document to keys. Made validate_csrf return explicit JSON format on /api/ endpoints instead of HTML.
-- P3.2: Generated requirements.in and frozen requirements.txt via pip-tools to lock dependencies.
-- P3.3: Extracted hardcoded database schema logic in database.py into sequentially versioned migration scripts in the migrations/ folder (001_initial.py and 002_alters.py) for both Postgres and SQLite.
-- P3.4: Added .pre-commit-config.yaml for automated code formatting checks (flake8).
+- Fixed PostgreSQL DatatypeMismatch issue in user_question_history where 1/0 were incorrectly used for the boolean was_correct column instead of native True/False.

@@ -9,7 +9,7 @@ def record_question_view(conn, user_id: int, question_id: int, was_correct: bool
     db_execute(
         conn,
         "INSERT INTO user_question_history (user_id, question_id, was_correct) VALUES (%s, %s, %s)",
-        (user_id, question_id, 1 if was_correct else 0 if was_correct is not None else None),
+        (user_id, question_id, was_correct),
     )
     conn.commit()
 
