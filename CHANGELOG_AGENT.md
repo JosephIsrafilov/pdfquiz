@@ -1,1 +1,2 @@
 - Fixed PostgreSQL DatatypeMismatch issue in user_question_history where 1/0 were incorrectly used for the boolean was_correct column instead of native True/False.
+- Fixed teacher dashboard room results breaking when parsing quiz sessions that return attempt_json as a list instead of a dict.

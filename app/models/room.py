@@ -100,42 +100,58 @@ def analyze_room_questions(results):
             continue
         try:
             attempt = json.loads(attempt_json) if isinstance(attempt_json, str) else attempt_json
-            quiz = attempt.get("quiz", [])
-            answers = attempt.get("answers", {})
-            for idx, question in enumerate(quiz):
-                qid = question.get("id")
-                if not qid:
-                    continue
-                if qid not in question_stats:
-                    question_stats[qid] = {
-                        "id": qid,
-                        "text": question.get("text", ""),
-                        "total_attempts": 0,
-                        "correct_attempts": 0
-                    }
-                
-                # Check correctness
-                selected = answers.get(str(idx))
-                if selected is None:
-                    selected = answers.get(idx)
+            if isinstance(attempt, dict):
+                quiz = attempt.get("quiz", [])
+                answers = attempt.get("answers", {})
+                for idx, question in enumerate(quiz):
+                    qid = question.get("id")
+                    if not qid:
+                        continue
+                    if qid not in question_stats:
+                        question_stats[qid] = {
+                            "id": qid,
+                            "text": question.get("text", ""),
+                            "total_attempts": 0,
+                            "correct_attempts": 0
+                        }
                     
-                is_correct = False
-                if question.get("question_type") == "multi_select":
-                    # For multi_select, options are a list of selected indices
-                    if selected is not None:
-                        correct_indices = {i for i, opt in enumerate(question.get("options", [])) if opt.get("is_correct")}
-                        is_correct = set(selected) == correct_indices
-                elif question.get("question_type") in ("fill_in_the_blank", "code_output"):
-                    if selected:
-                        correct_opts = [opt.get("text", "").strip().lower() for opt in question.get("options", []) if opt.get("is_correct")]
-                        is_correct = str(selected).strip().lower() in correct_opts
-                else:
-                    if selected is not None:
-                        is_correct = question["options"][int(selected)].get("is_correct", False)
-                
-                question_stats[qid]["total_attempts"] += 1
-                if is_correct:
-                    question_stats[qid]["correct_attempts"] += 1
+                    # Check correctness
+                    selected = answers.get(str(idx))
+                    if selected is None:
+                        selected = answers.get(idx)
+                        
+                    is_correct = False
+                    if question.get("question_type") == "multi_select":
+                        # For multi_select, options are a list of selected indices
+                        if selected is not None:
+                            correct_indices = {i for i, opt in enumerate(question.get("options", [])) if opt.get("is_correct")}
+                            is_correct = set(selected) == correct_indices
+                    elif question.get("question_type") in ("fill_in_the_blank", "code_output"):
+                        if selected:
+                            correct_opts = [opt.get("text", "").strip().lower() for opt in question.get("options", []) if opt.get("is_correct")]
+                            is_correct = str(selected).strip().lower() in correct_opts
+                    else:
+                        if selected is not None:
+                            is_correct = question["options"][int(selected)].get("is_correct", False)
+                    
+                    question_stats[qid]["total_attempts"] += 1
+                    if is_correct:
+                        question_stats[qid]["correct_attempts"] += 1
+            elif isinstance(attempt, list):
+                for item in attempt:
+                    qid = item.get("question_id")
+                    if not qid:
+                        continue
+                    if qid not in question_stats:
+                        question_stats[qid] = {
+                            "id": qid,
+                            "text": item.get("question_text", ""),
+                            "total_attempts": 0,
+                            "correct_attempts": 0
+                        }
+                    question_stats[qid]["total_attempts"] += 1
+                    if item.get("is_correct"):
+                        question_stats[qid]["correct_attempts"] += 1
         except Exception:
             continue
             
