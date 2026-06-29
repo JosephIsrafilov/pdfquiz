@@ -11,3 +11,7 @@ class Config:
     USING_POSTGRES = bool(os.environ.get("DATABASE_URL"))
     QUIZ_SIZE = 50
     MIN_RANGE = 50
+    DEBUG = os.environ.get("DEBUG", "0").lower() in ("1", "true", "yes")
+    SESSION_COOKIE_HTTPONLY = True
+    SESSION_COOKIE_SAMESITE = "Lax"
+    SESSION_COOKIE_SECURE = not DEBUG
