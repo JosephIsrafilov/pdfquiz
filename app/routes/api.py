@@ -13,6 +13,7 @@ from app.models.result import (
 )
 from app.models.user import fetch_user_by_id
 from app.utils import login_required
+from app.limiter import limiter
 from app.parsing import parse_uploaded_file
 
 
@@ -126,6 +127,7 @@ def register_api_routes(app):
         return jsonify({"result": result, "saved_result": saved_result})
 
     @app.route("/api/parse", methods=["POST"], endpoint="parse_document")
+    @limiter.limit(lambda: app.config["PARSE_RATE_LIMIT"])
     @login_required
     def parse_document():
         document_id_raw = request.form.get("document_id", "").strip()

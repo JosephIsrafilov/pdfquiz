@@ -15,3 +15,5 @@ class Config:
     SESSION_COOKIE_HTTPONLY = True
     SESSION_COOKIE_SAMESITE = "Lax"
     SESSION_COOKIE_SECURE = not DEBUG
+    LOGIN_RATE_LIMIT = os.environ.get("LOGIN_RATE_LIMIT", "5 per minute")
+    PARSE_RATE_LIMIT = os.environ.get("PARSE_RATE_LIMIT", "10 per minute")

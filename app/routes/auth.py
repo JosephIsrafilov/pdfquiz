@@ -3,10 +3,12 @@ from werkzeug.security import check_password_hash
 
 from app.models.user import create_user, fetch_user_by_username, serialize_user
 from app.utils import login_required
+from app.limiter import limiter
 
 
 def register_auth_routes(app):
     @app.route("/login", methods=["GET", "POST"], endpoint="login")
+    @limiter.limit(lambda: app.config["LOGIN_RATE_LIMIT"])
     def login():
         if request.method == "GET":
             return render_template("login.html")
@@ -19,6 +21,7 @@ def register_auth_routes(app):
         return redirect(url_for("index"))
 
     @app.route("/register", methods=["GET", "POST"], endpoint="register")
+    @limiter.limit(lambda: app.config["LOGIN_RATE_LIMIT"])
     def register():
         if request.method == "GET":
             return render_template("register.html")

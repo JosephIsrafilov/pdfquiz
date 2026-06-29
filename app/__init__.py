@@ -59,6 +59,9 @@ def create_app():
     from app.routes.main import register_main_routes
     from app.routes.admin import register_admin_routes
     from app.routes.api import register_api_routes
+    from app.limiter import limiter
+
+    limiter.init_app(app)
 
     register_auth_routes(app)
     register_main_routes(app)

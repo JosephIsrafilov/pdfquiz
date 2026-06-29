@@ -58,3 +58,13 @@ def client(app):
             return _client.get(*args, **kwargs)
 
     return CSRFClient()
+
+@pytest.fixture(autouse=True)
+def reset_limiter():
+    """Reset rate limiter before each test to prevent side effects."""
+    try:
+        from app.limiter import limiter
+        limiter.reset()
+    except Exception:
+        pass
+
