@@ -10,6 +10,7 @@ from app.models.knowledge import (
     delete_question,
     fetch_catalog,
     fetch_question,
+    fetch_question_accuracy_stats,
     fetch_questions_for_admin,
     get_active_pool,
     toggle_question,
@@ -105,6 +106,19 @@ def _parse_blank_options():
     return [{"text_en": answer_en, "text_ru": answer_ru, "is_correct": True}]
 
 
+def _parse_answer_variants():
+    """Alternate accepted phrasings for the single fill_in_the_blank/code_output option (index 0)."""
+    variants_en = [
+        v.strip() for v in request.form.get("blank_variants_en", "").split(",") if v.strip()
+    ]
+    variants_ru = [
+        v.strip() for v in request.form.get("blank_variants_ru", "").split(",") if v.strip()
+    ]
+    if not variants_en and not variants_ru:
+        return {}
+    return {"0": {"en": variants_en, "ru": variants_ru}}
+
+
 def _parse_question_form():
     topic_id = int(request.form.get("topic_id", "0"))
     text_en = request.form.get("text_en", "").strip()
@@ -129,6 +143,9 @@ def _parse_question_form():
     if difficulty not in DIFFICULTIES:
         difficulty = "beginner"
     pool = request.form.get("pool", "").strip() or None
+    answer_variants = (
+        _parse_answer_variants() if question_type in ("fill_in_the_blank", "code_output") else {}
+    )
     return {
         "topic_id": topic_id,
         "text_en": text_en,
@@ -139,7 +156,36 @@ def _parse_question_form():
         "difficulty": difficulty,
         "question_type": question_type,
         "pool": pool,
+        "answer_variants": answer_variants,
     }
+
+
+def _suspicious_import_reasons(options):
+    """Heuristics that flag a syntactically-valid but likely-wrong answer key.
+
+    These are warnings only — the question still imports. The teacher decides
+    whether to fix or ignore, since some legitimately have short/similar options.
+    """
+    reasons = []
+    texts = [option.get("text", "").strip() for option in options]
+    non_empty = [t for t in texts if t]
+    if len(non_empty) != len(set(t.casefold() for t in non_empty)):
+        reasons.append("duplicate option text")
+    if any(len(t) <= 1 for t in non_empty):
+        reasons.append("single-character option")
+    correct_texts = {
+        option.get("text", "").strip().casefold()
+        for option in options
+        if option.get("is_correct")
+    }
+    wrong_texts = {
+        option.get("text", "").strip().casefold()
+        for option in options
+        if not option.get("is_correct")
+    }
+    if correct_texts & wrong_texts:
+        reasons.append("correct answer duplicated as a wrong option")
+    return reasons
 
 
 def _serialize_admin_question(row):
@@ -148,6 +194,14 @@ def _serialize_admin_question(row):
     question = dict(row)
     question["options"] = json.loads(question.pop("options_json"))
     question["is_active"] = bool(question["is_active"])
+    variants_raw = question.pop("answer_variants_json", None)
+    try:
+        variants = json.loads(variants_raw) if variants_raw else {}
+    except (TypeError, ValueError):
+        variants = {}
+    entry = variants.get("0") or {}
+    question["answer_variants_en"] = ", ".join(entry.get("en") or [])
+    question["answer_variants_ru"] = ", ".join(entry.get("ru") or [])
     return question
 
 
@@ -275,6 +329,7 @@ def register_admin_routes(app):
             return _redirect_with("error", "The file could not be processed.")
         imported_count = 0
         skipped_count = 0
+        flagged_count = 0
         for question in imported:
             options = [
                 {
@@ -287,6 +342,8 @@ def register_admin_routes(app):
             if len(options) < 2 or not any(option["is_correct"] for option in options):
                 skipped_count += 1
                 continue
+            if _suspicious_import_reasons(question.get("options", [])):
+                flagged_count += 1
             create_question(
                 topic_id=topic_id,
                 text_en=question.get("text", "") if language == "en" else "",
@@ -304,6 +361,8 @@ def register_admin_routes(app):
         message = f"Imported {imported_count} questions."
         if skipped_count:
             message += f" Skipped {skipped_count} without a valid answer key."
+        if flagged_count:
+            message += f" Review {flagged_count} with a suspicious answer key (duplicate/short options)."
         return _redirect_with("success", message)
 
     @app.route(
@@ -397,6 +456,16 @@ def register_admin_routes(app):
             question_stats=question_stats,
             groups=[dict(g) for g in groups],
             current_group_id=group_id
+        )
+
+    @app.route("/admin/insights", endpoint="admin_insights")
+    @admin_required
+    def admin_insights():
+        return render_template(
+            "admin_insights.html",
+            current_user=serialize_user(fetch_user_by_id(session["user_id"])),
+            question_stats=fetch_question_accuracy_stats(),
+            rooms=[dict(row) for row in fetch_rooms_for_admin()],
         )
 
     @app.route("/admin/groups", methods=["POST"], endpoint="admin_create_group")

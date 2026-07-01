@@ -135,6 +135,7 @@ def register_api_routes(app):
                     mistake_numbers=mistake_numbers,
                     attempt_payload=result["review"],
                     room_id=result.get("room_id"),
+                    expired=result.get("expired", False),
                 )
                 if result_id:
                     mark_quiz_saved_result(token, result_id)

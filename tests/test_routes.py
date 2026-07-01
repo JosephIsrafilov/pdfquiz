@@ -715,3 +715,148 @@ def test_admin_panel_requires_admin(client):
     resp = client.get("/admin")
     # Either forbidden or redirect
     assert resp.status_code in (200, 302, 403)
+
+
+# ---------------------------------------------------------------------------
+# Fuzzy grading for fill_in_the_blank / code_output
+# ---------------------------------------------------------------------------
+
+
+def _make_admin(client, app, username):
+    from app.models.user import fetch_user_by_id, toggle_user_admin
+
+    client.post(
+        "/register",
+        data={"username": username, "password": "pass1234", "password_repeat": "pass1234"},
+        follow_redirects=True,
+    )
+    with client.session_transaction() as sess:
+        user_id = sess["user_id"]
+    with app.app_context():
+        if not fetch_user_by_id(user_id)["is_admin"]:
+            toggle_user_admin(user_id)
+    return user_id
+
+
+def test_fill_in_the_blank_grading_is_case_and_whitespace_insensitive(client, app):
+    from app.models.knowledge import create_course, create_topic
+
+    _make_admin(client, app, "blank_grader_admin")
+    course_id = create_course("Blank Grading Course", "Blank Grading Course")
+    topic_id = create_topic(course_id, "Blank Grading Topic", "Blank Grading Topic")
+
+    client.post(
+        "/admin/questions",
+        data={
+            "topic_id": str(topic_id),
+            "question_type": "fill_in_the_blank",
+            "text_en": "Capital of France?",
+            "text_ru": "Capital of France?",
+            "blank_answer_en": "Paris",
+            "blank_answer_ru": "Paris",
+            "blank_variants_en": "City of Paris",
+            "difficulty": "beginner",
+        },
+        follow_redirects=True,
+    )
+
+    quiz_resp = client.post(
+        "/api/quizzes",
+        json={"topic_ids": [topic_id], "count": 1, "language": "en", "difficulty": "all"},
+    )
+    assert quiz_resp.status_code == 201
+    quiz = quiz_resp.get_json()
+    question_id = quiz["questions"][0]["id"]
+
+    check_resp = client.post(
+        f"/api/quizzes/{quiz['token']}/check",
+        json={"question_id": question_id, "selected": "  paris  "},
+    )
+    assert check_resp.status_code == 200
+    assert check_resp.get_json()["is_correct"] is True
+
+
+def test_fill_in_the_blank_grading_rejects_wrong_answer(client, app):
+    from app.models.knowledge import create_course, create_topic
+
+    _make_admin(client, app, "blank_grader_admin2")
+    course_id = create_course("Blank Grading Course 2", "Blank Grading Course 2")
+    topic_id = create_topic(course_id, "Blank Grading Topic 2", "Blank Grading Topic 2")
+
+    client.post(
+        "/admin/questions",
+        data={
+            "topic_id": str(topic_id),
+            "question_type": "fill_in_the_blank",
+            "text_en": "Capital of France?",
+            "text_ru": "Capital of France?",
+            "blank_answer_en": "Paris",
+            "blank_answer_ru": "Paris",
+            "difficulty": "beginner",
+        },
+        follow_redirects=True,
+    )
+
+    quiz_resp = client.post(
+        "/api/quizzes",
+        json={"topic_ids": [topic_id], "count": 1, "language": "en", "difficulty": "all"},
+    )
+    quiz = quiz_resp.get_json()
+    question_id = quiz["questions"][0]["id"]
+
+    check_resp = client.post(
+        f"/api/quizzes/{quiz['token']}/check",
+        json={"question_id": question_id, "selected": "London"},
+    )
+    assert check_resp.status_code == 200
+    assert check_resp.get_json()["is_correct"] is False
+
+
+# ---------------------------------------------------------------------------
+# Quiz time-limit enforcement
+# ---------------------------------------------------------------------------
+
+
+def test_expired_quiz_rejects_check_and_marks_submit_expired(client, app):
+    from app.models.knowledge import fetch_catalog
+    from app.models.quiz import create_quiz
+    from app.database import db_execute, get_db_connection
+    from datetime import datetime, timedelta, timezone
+
+    with app.app_context():
+        catalog = fetch_catalog()
+        topic_ids = [catalog[0]["topics"][0]["id"]]
+        quiz = create_quiz(
+            topic_ids=topic_ids,
+            count=1,
+            language="en",
+            difficulty="all",
+            time_limit_minutes=10,
+        )
+        token = quiz["token"]
+        assert quiz["time_limit_minutes"] == 10
+
+        from app.database import USING_POSTGRES
+
+        past = datetime.now(timezone.utc) - timedelta(minutes=1)
+        with get_db_connection() as connection:
+            db_execute(
+                connection,
+                "UPDATE quiz_sessions SET expires_at = %s WHERE token = %s",
+                (past if USING_POSTGRES else past.isoformat(), token),
+            )
+            connection.commit()
+
+    question_id = quiz["questions"][0]["id"]
+    check_resp = client.post(
+        f"/api/quizzes/{token}/check",
+        json={"question_id": question_id, "selected": 0},
+    )
+    assert check_resp.status_code == 403
+
+    submit_resp = client.post(
+        f"/api/quizzes/{token}/submit",
+        json={"answers": {}},
+    )
+    assert submit_resp.status_code == 200
+    assert submit_resp.get_json()["result"]["expired"] is True

@@ -102,7 +102,8 @@ def fetch_questions_for_topics(
     with get_db_connection() as connection:
         return db_execute(connection, f"""
             SELECT q.id, q.topic_id, q.text_en, q.text_ru, q.options_json,
-                   q.explanation_en, q.explanation_ru, q.option_rationales_json, q.difficulty, q.is_active, q.question_type,
+                   q.explanation_en, q.explanation_ru, q.option_rationales_json, q.answer_variants_json,
+                   q.difficulty, q.is_active, q.question_type,
                    t.title_en AS topic_title_en, t.title_ru AS topic_title_ru,
                    c.title_en AS course_title_en, c.title_ru AS course_title_ru
             FROM questions q
@@ -139,7 +140,8 @@ def fetch_question(question_id: int):
     with get_db_connection() as connection:
         return db_execute(connection, """
             SELECT q.id, q.topic_id, q.text_en, q.text_ru, q.options_json,
-                   q.explanation_en, q.explanation_ru, q.option_rationales_json, q.difficulty, q.is_active, q.question_type,
+                   q.explanation_en, q.explanation_ru, q.option_rationales_json, q.answer_variants_json,
+                   q.difficulty, q.is_active, q.question_type,
                    t.title_en AS topic_title_en, t.title_ru AS topic_title_ru
             FROM questions q
             JOIN topics t ON t.id = q.topic_id
@@ -151,7 +153,8 @@ def fetch_questions_for_admin():
     with get_db_connection() as connection:
         return db_execute(connection, """
             SELECT q.id, q.topic_id, q.text_en, q.text_ru, q.options_json,
-                   q.explanation_en, q.explanation_ru, q.option_rationales_json, q.difficulty, q.is_active, q.question_type,
+                   q.explanation_en, q.explanation_ru, q.option_rationales_json, q.answer_variants_json,
+                   q.difficulty, q.is_active, q.question_type,
                    t.title_en AS topic_title_en, t.title_ru AS topic_title_ru,
                    c.title_en AS course_title_en, c.title_ru AS course_title_ru
             FROM questions q
@@ -159,6 +162,47 @@ def fetch_questions_for_admin():
             JOIN courses c ON c.id = t.course_id
             ORDER BY c.id, t.sort_order, q.id DESC
         """).fetchall()
+
+
+def fetch_question_accuracy_stats(min_attempts: int = 1):
+    """Bank-wide per-question accuracy from user_question_history.
+
+    Complements analyze_room_questions (room.py), which is scoped to one room's
+    attempt_json; this reuses the history table so it covers every quiz a
+    question has appeared in, not just room-issued ones.
+    """
+    with get_db_connection() as connection:
+        rows = db_execute(connection, """
+            SELECT q.id, q.text_en, q.text_ru, q.difficulty, q.question_type,
+                   t.title_en AS topic_title_en, c.title_en AS course_title_en,
+                   COUNT(h.id) AS total_attempts,
+                   SUM(CASE WHEN h.was_correct THEN 1 ELSE 0 END) AS correct_attempts
+            FROM questions q
+            JOIN topics t ON t.id = q.topic_id
+            JOIN courses c ON c.id = t.course_id
+            JOIN user_question_history h ON h.question_id = q.id
+            WHERE q.is_active = TRUE
+            GROUP BY q.id, q.text_en, q.text_ru, q.difficulty, q.question_type,
+                     t.title_en, c.title_en
+            HAVING COUNT(h.id) >= %s
+        """, (min_attempts,)).fetchall()
+
+    stats = []
+    for row in rows:
+        total = row["total_attempts"] or 0
+        correct = row["correct_attempts"] or 0
+        stats.append({
+            "id": row["id"],
+            "text": row["text_en"] or row["text_ru"] or "",
+            "topic": row["topic_title_en"],
+            "course": row["course_title_en"],
+            "difficulty": row["difficulty"],
+            "question_type": row["question_type"],
+            "total_attempts": total,
+            "correct_attempts": correct,
+            "accuracy": (correct / total * 100) if total else 0,
+        })
+    return sorted(stats, key=lambda s: s["accuracy"])
 
 
 def create_course(title_en: str, title_ru: str):
@@ -212,6 +256,7 @@ def create_question(
     difficulty: str = "beginner",
     question_type: str = "mcq",
     pool: Optional[str] = None,
+    answer_variants: Optional[dict] = None,
 ):
     with get_db_connection() as connection:
         if pool:
@@ -220,8 +265,9 @@ def create_question(
                 """
                 INSERT INTO questions (
                     topic_id, text_en, text_ru, options_json,
-                    explanation_en, explanation_ru, option_rationales_json, difficulty, question_type, pool
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    explanation_en, explanation_ru, option_rationales_json, difficulty, question_type, pool,
+                    answer_variants_json
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """,
                 (
                     topic_id,
@@ -234,6 +280,7 @@ def create_question(
                     difficulty,
                     question_type,
                     pool,
+                    json.dumps(answer_variants or {}, ensure_ascii=False),
                 ),
             )
         else:
@@ -242,8 +289,9 @@ def create_question(
                 """
                 INSERT INTO questions (
                     topic_id, text_en, text_ru, options_json,
-                    explanation_en, explanation_ru, option_rationales_json, difficulty, question_type
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    explanation_en, explanation_ru, option_rationales_json, difficulty, question_type,
+                    answer_variants_json
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """,
                 (
                     topic_id,
@@ -255,6 +303,7 @@ def create_question(
                     json.dumps(option_rationales or {}, ensure_ascii=False),
                     difficulty,
                     question_type,
+                    json.dumps(answer_variants or {}, ensure_ascii=False),
                 ),
             )
         connection.commit()
@@ -273,13 +322,15 @@ def update_question(
     difficulty: str,
     question_type: str = "mcq",
     pool: Optional[str] = None,
+    answer_variants: Optional[dict] = None,
 ):
     with get_db_connection() as connection:
         if pool:
             db_execute(connection, """
                 UPDATE questions
                 SET topic_id = %s, text_en = %s, text_ru = %s, options_json = %s,
-                    explanation_en = %s, explanation_ru = %s, option_rationales_json = %s, difficulty = %s, question_type = %s, pool = %s
+                    explanation_en = %s, explanation_ru = %s, option_rationales_json = %s, difficulty = %s, question_type = %s, pool = %s,
+                    answer_variants_json = %s
                 WHERE id = %s
             """, (
                 topic_id,
@@ -292,13 +343,15 @@ def update_question(
                 difficulty,
                 question_type,
                 pool,
+                json.dumps(answer_variants or {}, ensure_ascii=False),
                 question_id,
             ))
         else:
             db_execute(connection, """
                 UPDATE questions
                 SET topic_id = %s, text_en = %s, text_ru = %s, options_json = %s,
-                    explanation_en = %s, explanation_ru = %s, option_rationales_json = %s, difficulty = %s, question_type = %s
+                    explanation_en = %s, explanation_ru = %s, option_rationales_json = %s, difficulty = %s, question_type = %s,
+                    answer_variants_json = %s
                 WHERE id = %s
             """, (
                 topic_id,
@@ -310,6 +363,7 @@ def update_question(
                 json.dumps(option_rationales or {}, ensure_ascii=False),
                 difficulty,
                 question_type,
+                json.dumps(answer_variants or {}, ensure_ascii=False),
                 question_id,
             ))
         connection.commit()

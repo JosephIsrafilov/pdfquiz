@@ -5,6 +5,7 @@ from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 
 from app.database import USING_POSTGRES, db_execute, get_db_connection
+from app.models.grading import text_answer_matches
 from app.models.knowledge import fetch_questions_for_topics, fetch_templates_for_topics, fetch_topics_by_ids
 from app.models.question_history import get_weighted_question_sample, record_question_view
 from app.models.template_engine import generate_question
@@ -55,6 +56,19 @@ def _localized_rationale(question, option, language: str) -> str:
         return ""
 
 
+def _localized_answer_variants(question, original_index: int, language: str) -> list:
+    """Extra accepted phrasings for a fill_in_the_blank/code_output answer option."""
+    raw = question["answer_variants_json"] if "answer_variants_json" in question.keys() else None
+    if not raw:
+        return []
+    try:
+        variants_by_option = json.loads(raw)
+    except Exception:
+        return []
+    entry = variants_by_option.get(str(original_index)) or {}
+    return entry.get(language) or entry.get("ru" if language == "en" else "en") or []
+
+
 
 def _generate_template_instances(templates, topic_id_to_row, user_id, quiz_token, per_template=3):
     """Expand each template into a few seeded, deterministic instances.
@@ -93,7 +107,7 @@ def _generate_template_instances(templates, topic_id_to_row, user_id, quiz_token
     return instances
 
 
-def create_quiz(topic_ids, count: int, language: str, difficulty: str, user_id=None, room_id=None, session_exclude=None):
+def create_quiz(topic_ids, count: int, language: str, difficulty: str, user_id=None, room_id=None, session_exclude=None, time_limit_minutes=None):
     if language not in ALLOWED_LANGUAGES:
         raise ValueError("Unsupported language.")
     if difficulty not in ALLOWED_DIFFICULTIES:
@@ -161,13 +175,18 @@ def create_quiz(topic_ids, count: int, language: str, difficulty: str, user_id=N
     random.shuffle(public_questions)
     question_ids = [question["id"] for question in public_questions]
 
+    expires_at = None
+    if time_limit_minutes:
+        expires_at = datetime.now(timezone.utc) + timedelta(minutes=int(time_limit_minutes))
+
     token = quiz_token
     with get_db_connection() as connection:
         db_execute(connection, """
             INSERT INTO quiz_sessions (
                 token, user_id, language, question_order_json,
-                option_orders_json, topic_ids_json, room_id, generated_questions_json
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                option_orders_json, topic_ids_json, room_id, generated_questions_json,
+                expires_at
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
         """, (
             token,
             user_id,
@@ -177,6 +196,7 @@ def create_quiz(topic_ids, count: int, language: str, difficulty: str, user_id=N
             json.dumps(normalized_topic_ids),
             room_id,
             json.dumps({qid: generated_lookup[qid] for qid in question_ids if qid in generated_lookup}),
+            expires_at.isoformat() if not USING_POSTGRES and expires_at else expires_at,
         ))
         connection.commit()
 
@@ -188,6 +208,7 @@ def create_quiz(topic_ids, count: int, language: str, difficulty: str, user_id=N
         "topics": topic_names,
         "questions": public_questions,
         "room_id": room_id,
+        "time_limit_minutes": int(time_limit_minutes) if time_limit_minutes else None,
     }
 
 
@@ -196,7 +217,7 @@ def create_quiz_from_room(code: str, language: str, user_id=None):
     room = fetch_room_by_code(code)
     if not room:
         raise ValueError("Invalid or inactive room code.")
-    
+
     topic_ids = json.loads(room["topic_ids_json"])
     count = room["question_count"] or 10
     difficulty_val = room["difficulty"] or "all"
@@ -208,9 +229,9 @@ def create_quiz_from_room(code: str, language: str, user_id=None):
         language=language,
         difficulty=difficulty_val,
         user_id=user_id,
-        room_id=room["id"]
+        room_id=room["id"],
+        time_limit_minutes=room["time_limit_minutes"] if "time_limit_minutes" in room.keys() else None,
     )
-    quiz_data["time_limit_minutes"] = room["time_limit_minutes"] if "time_limit_minutes" in room.keys() else None
     return quiz_data
 
 
@@ -244,7 +265,7 @@ def _load_quiz_rows(quiz_session):
             rows = db_execute(connection, f"""
                 SELECT q.id, q.topic_id, q.text_en, q.text_ru, q.options_json,
                        q.explanation_en, q.explanation_ru, q.option_rationales_json, q.difficulty,
-                       q.question_type,
+                       q.question_type, q.answer_variants_json,
                        t.title_en AS topic_title_en, t.title_ru AS topic_title_ru
                 FROM questions q
                 JOIN topics t ON t.id = q.topic_id
@@ -332,13 +353,20 @@ def _assess_question(question, option_order, user_answer, language):
         user_answer_str = str(user_answer).strip() if user_answer else ""
         is_unanswered = not user_answer_str
         selected_answer = user_answer_str
-        
-        correct_answers_texts = [
-            _localized_option(options[idx], language).strip() for idx in correct_original
-        ]
-        
+
+        accepted_answers = []
+        for idx in correct_original:
+            accepted_answers.append(_localized_option(options[idx], language))
+            accepted_answers.extend(_localized_answer_variants(question, idx, language))
+
         if not is_unanswered:
-            is_correct = any(user_answer_str == t for t in correct_answers_texts)
+            # code_output stays case-sensitive (output correctness matters);
+            # fill_in_the_blank is lenient since it's a free-text recall answer.
+            is_correct = text_answer_matches(
+                user_answer_str,
+                accepted_answers,
+                case_sensitive=question_type == "code_output",
+            )
         else:
             is_correct = False
             
@@ -380,6 +408,17 @@ def _assess_question(question, option_order, user_answer, language):
     }
 
 
+def _is_quiz_expired(quiz_session) -> bool:
+    expires_at = quiz_session.get("expires_at")
+    if not expires_at:
+        return False
+    if isinstance(expires_at, str):
+        expires_at = datetime.fromisoformat(expires_at)
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+    return datetime.now(timezone.utc) > expires_at
+
+
 def check_quiz_question(token: str, question_id: int, selected, user_id=None):
     quiz_session = fetch_quiz_session(token)
     if not quiz_session:
@@ -388,6 +427,8 @@ def check_quiz_question(token: str, question_id: int, selected, user_id=None):
         raise ValueError("This quiz has already been submitted.")
     if quiz_session["user_id"] is not None and quiz_session["user_id"] != user_id:
         raise PermissionError("This quiz belongs to another user.")
+    if _is_quiz_expired(quiz_session):
+        raise PermissionError("The time limit for this quiz has expired.")
 
     # Check if question already checked in this session
     checked = json.loads(quiz_session.get("checked_questions_json") or "[]")
@@ -489,6 +530,7 @@ def submit_quiz(token: str, answers, user_id=None):
         "review": review,
         "answers": normalized_answers,
         "room_id": quiz_session["room_id"],
+        "expired": _is_quiz_expired(quiz_session),
     }
 
     with get_db_connection() as connection:

@@ -14,6 +14,16 @@ def _is_missing_room_id_column(error: Exception) -> bool:
     )
 
 
+def _is_missing_expired_column(error: Exception) -> bool:
+    message = str(error).lower()
+    error_name = type(error).__name__.lower()
+    return "expired" in message and (
+        "no column" in message
+        or "does not exist" in message
+        or "undefinedcolumn" in error_name
+    )
+
+
 def fetch_results_for_user(user_id: int, limit: int = 50):
     with get_db_connection() as connection:
         return db_execute(connection, """
@@ -21,7 +31,7 @@ def fetch_results_for_user(user_id: int, limit: int = 50):
                    r.total_questions, r.quiz_size, r.graded, r.correct,
                    r.unanswered, r.missing_answer_key,
                    r.mistake_numbers_json AS mistake_numbers,
-                   r.attempt_json, r.created_at, d.title AS document_title
+                   r.attempt_json, r.created_at, r.expired, d.title AS document_title
             FROM results r
             LEFT JOIN documents d ON r.document_id = d.id
             WHERE r.user_id = %s
@@ -37,7 +47,7 @@ def fetch_result_for_user(result_id: int, user_id: int):
                    r.total_questions, r.quiz_size, r.graded, r.correct,
                    r.unanswered, r.missing_answer_key,
                    r.mistake_numbers_json AS mistake_numbers,
-                   r.attempt_json, r.created_at, d.title AS document_title
+                   r.attempt_json, r.created_at, r.expired, d.title AS document_title
             FROM results r
             LEFT JOIN documents d ON r.document_id = d.id
             WHERE r.id = %s AND r.user_id = %s
@@ -57,6 +67,7 @@ def save_result(
     mistake_numbers: List[int],
     attempt_payload,
     room_id: Optional[int] = None,
+    expired: bool = False,
 ) -> Optional[int]:
     mistake_json = json.dumps(mistake_numbers)
     attempt_json = json.dumps(attempt_payload) if attempt_payload is not None else None
@@ -67,28 +78,41 @@ def save_result(
                 INSERT INTO results (
                     user_id, document_id, source_label, total_questions, quiz_size,
                     graded, correct, unanswered, missing_answer_key,
-                    mistake_numbers_json, attempt_json, room_id
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s){returning}
+                    mistake_numbers_json, attempt_json, room_id, expired
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s){returning}
             """, (
                 user_id, document_id, source_label, total_questions, quiz_size,
                 graded, correct, unanswered, missing_answer_key,
-                mistake_json, attempt_json, room_id,
+                mistake_json, attempt_json, room_id, expired,
             ))
         except Exception as error:
             connection.rollback()
-            if not _is_missing_room_id_column(error):
-                raise
-            cursor = db_execute(connection, f"""
-                INSERT INTO results (
+            if _is_missing_expired_column(error):
+                cursor = db_execute(connection, f"""
+                    INSERT INTO results (
+                        user_id, document_id, source_label, total_questions, quiz_size,
+                        graded, correct, unanswered, missing_answer_key,
+                        mistake_numbers_json, attempt_json, room_id
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s){returning}
+                """, (
                     user_id, document_id, source_label, total_questions, quiz_size,
                     graded, correct, unanswered, missing_answer_key,
-                    mistake_numbers_json, attempt_json
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s){returning}
-            """, (
-                user_id, document_id, source_label, total_questions, quiz_size,
-                graded, correct, unanswered, missing_answer_key,
-                mistake_json, attempt_json,
-            ))
+                    mistake_json, attempt_json, room_id,
+                ))
+            elif _is_missing_room_id_column(error):
+                cursor = db_execute(connection, f"""
+                    INSERT INTO results (
+                        user_id, document_id, source_label, total_questions, quiz_size,
+                        graded, correct, unanswered, missing_answer_key,
+                        mistake_numbers_json, attempt_json
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s){returning}
+                """, (
+                    user_id, document_id, source_label, total_questions, quiz_size,
+                    graded, correct, unanswered, missing_answer_key,
+                    mistake_json, attempt_json,
+                ))
+            else:
+                raise
         connection.commit()
     if USING_POSTGRES:
         row = cursor.fetchone()
@@ -112,6 +136,7 @@ def serialize_result(result):
         "created_at": str(result["created_at"]),
         "document_id": result["document_id"],
         "attempt_available": bool(result["attempt_json"]),
+        "expired": bool(result["expired"]) if "expired" in result.keys() else False,
     }
 
 

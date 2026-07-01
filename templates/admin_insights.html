@@ -3,11 +3,12 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Room Results - Knowledge Check</title>
+    <title>Insights - Knowledge Check</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}" />
+    <meta name="csrf-token" content="{{ csrf_token() }}" />
     <script>
       (function () {
         var saved = localStorage.getItem("theme");
@@ -37,37 +38,24 @@
         <header class="profile-head">
           <div class="room-results-head">
             <div>
-              <h1 class="room-results-title">{{ room.title }}</h1>
-              <p class="room-results-meta">
-                Code: <strong class="room-code-pill">{{ room.code }}</strong>
-                • Created: {{ room.created_at }} 
-                • Questions: {{ room.question_count }}
-              </p>
+              <h1 class="room-results-title">Question bank insights</h1>
+              <p class="room-results-meta">Bank-wide accuracy across every quiz a question has appeared in.</p>
             </div>
-            
-            <form method="get" action="{{ url_for('admin_room_results', room_id=room.id) }}" class="inline-form">
-              <label class="item-meta">Filter by Group:</label>
-              <select name="group_id" class="select-input" onchange="this.form.submit()" style="padding: 6px 12px; font-size: 0.9em; height: auto;">
-                <option value="">All Students</option>
-                {% for group in groups %}
-                  <option value="{{ group.id }}" {% if current_group_id == group.id %}selected{% endif %}>{{ group.name }}</option>
-                {% endfor %}
-              </select>
-            </form>
           </div>
         </header>
 
-        {% if question_stats %}
         <section class="panel">
           <div class="section-head">
-            <h2>Question Statistics</h2>
-            <p>Difficulty breakdown for the filtered students.</p>
+            <h2>Question accuracy</h2>
+            <p>Flags questions that are likely too easy, too hard, or have a bad answer key.</p>
           </div>
           <div class="table-wrap">
             <table class="data-table">
               <thead>
                 <tr>
-                  <th style="width: 60%;">Question Snippet</th>
+                  <th style="width: 45%;">Question</th>
+                  <th>Topic</th>
+                  <th>Difficulty</th>
                   <th>Attempts</th>
                   <th>Accuracy</th>
                 </tr>
@@ -78,6 +66,8 @@
                   <td class="truncate">
                     {{ qs.text[:100] + '...' if qs.text|length > 100 else qs.text }}
                   </td>
+                  <td class="muted">{{ qs.course }} · {{ qs.topic }}</td>
+                  <td class="muted">{{ qs.difficulty }}</td>
                   <td class="muted">{{ qs.total_attempts }}</td>
                   <td>
                     {% if qs.accuracy >= 95 %}
@@ -89,59 +79,37 @@
                     {% endif %}
                   </td>
                 </tr>
+                {% else %}
+                <tr>
+                  <td colspan="5" class="muted" style="padding: 24px 12px; text-align: center;">
+                    No question history yet.
+                  </td>
+                </tr>
                 {% endfor %}
               </tbody>
             </table>
           </div>
         </section>
-        {% endif %}
 
         <section class="panel">
           <div class="section-head">
-            <h2>Student Results</h2>
-            <p>All attempts by students in this room.</p>
+            <h2>Rooms</h2>
+            <p>Per-room breakdowns and student results.</p>
           </div>
-          
-          <div class="table-wrap">
-            <table class="data-table">
-              <thead>
-                <tr>
-                  <th>Student</th>
-                  <th>Score</th>
-                  <th>Details</th>
-                  <th>Date</th>
-                </tr>
-              </thead>
-              <tbody>
-                {% for r in results %}
-                <tr>
-                  <td><strong>{{ r.username or 'Anonymous' }}</strong></td>
-                  <td>
-                    {% if r.total_questions > 0 %}
-                    <span class="score {% if r.correct / r.total_questions >= 0.8 %}score--good{% elif r.correct / r.total_questions >= 0.6 %}score--medium{% else %}score--low{% endif %}">
-                      {{ (r.correct / r.total_questions * 100) | round | int }}%
-                    </span>
-                    {% else %}
-                    0%
-                    {% endif %}
-                  </td>
-                  <td class="muted">
-                    {{ r.correct }} / {{ r.total_questions }} correct
-                    {% if r.expired %}<span class="status-chip status-chip--hard">Auto-submitted (time up)</span>{% endif %}
-                  </td>
-                  <td class="muted">
-                    {{ r.created_at_str }}
-                  </td>
-                </tr>
-                {% else %}
-                <tr>
-                  <td colspan="4" class="muted" style="padding: 24px 12px; text-align: center;">
-                    No results found for this room yet.
-                  </td>
-                </tr>
-                {% endfor %}
-              </tbody>
-            </table>
+          <div class="admin-list">
+            {% for room in rooms %}
+            <article class="admin-item">
+              <div>
+                <strong>{{ room.title }}</strong>
+                <span class="inline-code-badge">{{ room.code }}</span>
+              </div>
+              <div class="admin-actions">
+                <a class="button" href="{{ url_for('admin_room_results', room_id=room.id) }}">View results</a>
+              </div>
+            </article>
+            {% else %}
+              <div class="empty-state">No rooms created yet.</div>
+            {% endfor %}
           </div>
         </section>
       </main>

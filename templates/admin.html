@@ -27,6 +27,7 @@
         <div class="topbar-actions">
           <button class="theme-toggle" type="button">Theme</button>
           <span class="user-pill">{{ current_user.username }} <strong>admin</strong></span>
+          <a class="button" href="{{ url_for('admin_insights') }}">Insights</a>
           <a class="button" href="{{ url_for('index') }}">Student view</a>
           <form method="post" action="{{ url_for('logout') }}">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
@@ -159,10 +160,14 @@
           </div>
 
           <div class="option-editor" data-question-section="fill_in_the_blank code_output" style="display: none;">
-            <div class="option-editor__head"><strong>Correct answer</strong><span>Student input is matched exactly against this text.</span></div>
+            <div class="option-editor__head"><strong>Correct answer</strong><span>Fill-in-the-blank matches loosely (case/whitespace-insensitive); code output stays case-sensitive.</span></div>
             <div class="bilingual-grid">
               <div><label class="control-label">Answer · English</label><input class="text-input" name="blank_answer_en" value="{% if q and q.options %}{{ q.options[0].text_en or '' }}{% endif %}" /></div>
               <div><label class="control-label">Answer · Russian</label><input class="text-input" name="blank_answer_ru" value="{% if q and q.options %}{{ q.options[0].text_ru or '' }}{% endif %}" /></div>
+            </div>
+            <div class="bilingual-grid">
+              <div><label class="control-label">Alternate answers · English (comma-separated)</label><input class="text-input" name="blank_variants_en" value="{{ q.answer_variants_en or '' }}" /></div>
+              <div><label class="control-label">Alternate answers · Russian (comma-separated)</label><input class="text-input" name="blank_variants_ru" value="{{ q.answer_variants_ru or '' }}" /></div>
             </div>
           </div>
 
