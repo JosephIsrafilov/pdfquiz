@@ -268,6 +268,104 @@ def test_python_curriculum_sync_is_idempotent(client):
     assert after["question_count"] == before["question_count"]
 
 
+def test_template_generation_is_deterministic():
+    from app.models.template_engine import generate_question
+
+    template = {
+        "template_en": "What does {a} + {b} return?",
+        "template_ru": "Что вернет {a} + {b}?",
+        "variables_spec_json": {
+            "a": {"type": "int", "range": [1, 20]},
+            "b": {"type": "int", "range": [1, 20]},
+        },
+        "answer_expression": "a + b",
+        "difficulty": "beginner",
+    }
+    first = generate_question(dict(template), seed="student1:tokenABC:arithmetic_add:0")
+    second = generate_question(dict(template), seed="student1:tokenABC:arithmetic_add:0")
+    third = generate_question(dict(template), seed="student2:tokenXYZ:arithmetic_add:0")
+
+    assert first == second
+    assert first["text_en"] != third["text_en"] or first["correct"] != third["correct"]
+
+
+def test_topic_quiz_includes_generated_template_questions(client):
+    from app.models.knowledge import fetch_catalog
+
+    python_course = next(
+        course for course in fetch_catalog() if course["title_en"] == "Python"
+    )
+    operators_topic = next(
+        topic for topic in python_course["topics"] if topic["title_en"] == "Operators"
+    )
+
+    resp = client.post(
+        "/api/quizzes",
+        json={
+            "topic_ids": [operators_topic["id"]],
+            "count": 8,
+            "language": "en",
+            "difficulty": "all",
+        },
+    )
+    assert resp.status_code == 201
+    quiz = resp.get_json()
+    generated_ids = [q["id"] for q in quiz["questions"] if isinstance(q["id"], str)]
+    assert generated_ids, "expected at least one seeded-template question in the mix"
+
+    generated_question = next(q for q in quiz["questions"] if q["id"] in generated_ids)
+    check_resp = client.post(
+        f"/api/quizzes/{quiz['token']}/check",
+        json={"question_id": generated_question["id"], "selected": 0},
+    )
+    assert check_resp.status_code == 200
+    assert "is_correct" in check_resp.get_json()
+
+    answers = {str(q["id"]): 0 for q in quiz["questions"]}
+    submit_resp = client.post(
+        f"/api/quizzes/{quiz['token']}/submit",
+        json={"answers": answers},
+    )
+    assert submit_resp.status_code == 200
+    assert submit_resp.get_json()["result"]["total"] == 8
+
+
+def test_guest_session_exclude_avoids_repeat_questions(client):
+    from app.models.knowledge import fetch_catalog
+
+    with client.session_transaction() as sess:
+        sess.pop("user_id", None)
+
+    python_course = next(
+        course for course in fetch_catalog() if course["title_en"] == "Python"
+    )
+    topic_id = next(
+        topic["id"] for topic in python_course["topics"] if topic["title_en"] == "Booleans"
+    )
+
+    first_resp = client.post(
+        "/api/quizzes",
+        json={"topic_ids": [topic_id], "count": 4, "language": "en", "difficulty": "all"},
+    )
+    assert first_resp.status_code == 201
+    first_ids = {q["id"] for q in first_resp.get_json()["questions"] if isinstance(q["id"], int)}
+    assert first_ids
+
+    second_resp = client.post(
+        "/api/quizzes",
+        json={
+            "topic_ids": [topic_id],
+            "count": 4,
+            "language": "en",
+            "difficulty": "all",
+            "session_exclude": list(first_ids),
+        },
+    )
+    assert second_resp.status_code == 201
+    second_ids = {q["id"] for q in second_resp.get_json()["questions"] if isinstance(q["id"], int)}
+    assert not (first_ids & second_ids), "excluded question ids leaked into the next quiz"
+
+
 def test_profile_requires_login(client):
     """Unauthenticated access to /profile should redirect."""
     # Make sure we are logged out
@@ -444,6 +542,60 @@ def test_api_results_removed(client):
 # ---------------------------------------------------------------------------
 # Admin panel — access control
 # ---------------------------------------------------------------------------
+
+
+def test_admin_creates_true_false_and_fill_in_the_blank_questions(client, app):
+    from app.models.knowledge import create_course, create_topic
+    from app.models.user import toggle_user_admin
+
+    client.post(
+        "/register",
+        data={"username": "adminauthor", "password": "pass1234", "password_repeat": "pass1234"},
+        follow_redirects=True,
+    )
+    with client.session_transaction() as sess:
+        user_id = sess["user_id"]
+    with app.app_context():
+        from app.models.user import fetch_user_by_id
+        if not fetch_user_by_id(user_id)["is_admin"]:
+            toggle_user_admin(user_id)
+
+    course_id = create_course("Admin Authoring Course", "Admin Authoring Course")
+    topic_id = create_topic(course_id, "Authoring Topic", "Authoring Topic")
+
+    tf_resp = client.post(
+        "/admin/questions",
+        data={
+            "topic_id": str(topic_id),
+            "question_type": "true_false",
+            "text_en": "True or false: 1 + 1 == 2",
+            "text_ru": "True or false: 1 + 1 == 2",
+            "correct_boolean": "true",
+            "difficulty": "beginner",
+        },
+        follow_redirects=True,
+    )
+    assert tf_resp.status_code == 200
+
+    blank_resp = client.post(
+        "/admin/questions",
+        data={
+            "topic_id": str(topic_id),
+            "question_type": "fill_in_the_blank",
+            "text_en": "What does len('ab') return?",
+            "text_ru": "What does len('ab') return?",
+            "blank_answer_en": "2",
+            "blank_answer_ru": "2",
+            "difficulty": "beginner",
+        },
+        follow_redirects=True,
+    )
+    assert blank_resp.status_code == 200
+
+    from app.models.knowledge import fetch_questions_for_admin
+    created = [q for q in fetch_questions_for_admin() if q["topic_id"] == topic_id]
+    types_created = {q["question_type"] for q in created}
+    assert types_created == {"true_false", "fill_in_the_blank"}
 
 
 def test_admin_panel_requires_admin(client):

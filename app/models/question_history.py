@@ -74,6 +74,13 @@ def get_user_question_stats(conn, user_id: int, question_ids: list[int]) -> dict
     return stats
 
 
+def _is_generated(question) -> bool:
+    """Seeded template instances carry an id like "gen:..." and never repeat,
+    so they're excluded from the user_question_history lookup (its question_id
+    column is an integer FK and has nothing to say about them anyway)."""
+    return bool("is_generated" in question.keys() and question["is_generated"])
+
+
 def get_weighted_question_sample(
     conn,
     user_id: int | None,
@@ -92,6 +99,7 @@ def get_weighted_question_sample(
     - Seen 2 times, <14 days ago: weight 1
     - Seen 3+ times in last 30 days: weight 0 (skip)
     - In session_exclude set: weight 0 (skip)
+    - Generated (seeded template) instances: weight 10, always fresh
 
     Falls back to uniform random if user_id is None (guest).
     """
@@ -103,8 +111,8 @@ def get_weighted_question_sample(
         random.shuffle(available)
         return available[:count]
 
-    # Get stats for all available questions
-    question_ids = [q["id"] for q in available_questions]
+    # Get stats for static questions only; generated instances have no history row
+    question_ids = [q["id"] for q in available_questions if not _is_generated(q)]
     stats = get_user_question_stats(conn, user_id, question_ids)
 
     # Calculate weights
@@ -114,6 +122,11 @@ def get_weighted_question_sample(
 
         # Skip if in session exclude
         if qid in session_exclude:
+            continue
+
+        if _is_generated(question):
+            weight = 10
+            weighted.append((question, weight))
             continue
 
         stat = stats.get(qid)

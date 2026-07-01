@@ -5,8 +5,9 @@ from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 
 from app.database import USING_POSTGRES, db_execute, get_db_connection
-from app.models.knowledge import fetch_questions_for_topics, fetch_topics_by_ids
+from app.models.knowledge import fetch_questions_for_topics, fetch_templates_for_topics, fetch_topics_by_ids
 from app.models.question_history import get_weighted_question_sample, record_question_view
+from app.models.template_engine import generate_question
 
 
 ALLOWED_LANGUAGES = {"en", "ru"}
@@ -41,7 +42,44 @@ def _localized_rationale(question, option, language: str) -> str:
 
 
 
-def create_quiz(topic_ids, count: int, language: str, difficulty: str, user_id=None, room_id=None):
+def _generate_template_instances(templates, topic_id_to_row, user_id, quiz_token, per_template=3):
+    """Expand each template into a few seeded, deterministic instances.
+
+    Seed = user identity + quiz token + template key + instance index, so the same
+    student never gets the exact same numbers twice across quizzes, but re-checking
+    an answer within one quiz session reproduces the identical question.
+    """
+    instances = []
+    identity = str(user_id) if user_id is not None else "guest"
+    for template in templates:
+        for instance_index in range(per_template):
+            seed = f"{identity}:{quiz_token}:{template['template_key']}:{instance_index}"
+            generated = generate_question(dict(template), seed)
+            options_text = [generated["correct"], *generated["wrong"]]
+            options = [
+                {"text_en": text, "text_ru": text, "is_correct": index == 0}
+                for index, text in enumerate(options_text)
+            ]
+            topic_row = topic_id_to_row[template["topic_id"]]
+            instances.append({
+                "id": f"gen:{template['template_key']}:{seed}",
+                "topic_id": template["topic_id"],
+                "text_en": generated["text_en"],
+                "text_ru": generated["text_ru"],
+                "options_json": json.dumps(options, ensure_ascii=False),
+                "explanation_en": "",
+                "explanation_ru": "",
+                "option_rationales_json": "{}",
+                "difficulty": generated["difficulty"],
+                "question_type": generated["question_type"],
+                "topic_title_en": topic_row["title_en"],
+                "topic_title_ru": topic_row["title_ru"],
+                "is_generated": True,
+            })
+    return instances
+
+
+def create_quiz(topic_ids, count: int, language: str, difficulty: str, user_id=None, room_id=None, session_exclude=None):
     if language not in ALLOWED_LANGUAGES:
         raise ValueError("Unsupported language.")
     if difficulty not in ALLOWED_DIFFICULTIES:
@@ -61,6 +99,17 @@ def create_quiz(topic_ids, count: int, language: str, difficulty: str, user_id=N
         if _localized(question, "text", language)
         and len(json.loads(question["options_json"])) >= 1
     ]
+
+    quiz_token = secrets.token_urlsafe(32)
+    templates = fetch_templates_for_topics(normalized_topic_ids, difficulty)
+    generated_lookup = {}
+    if templates:
+        topic_id_to_row = {topic["id"]: topic for topic in topics}
+        generated_instances = _generate_template_instances(templates, topic_id_to_row, user_id, quiz_token)
+        for instance in generated_instances:
+            generated_lookup[instance["id"]] = instance
+        available_questions = [*available_questions, *generated_instances]
+
     if not available_questions:
         raise ValueError("No questions are available for this selection.")
     if count > len(available_questions):
@@ -74,6 +123,7 @@ def create_quiz(topic_ids, count: int, language: str, difficulty: str, user_id=N
             user_id,
             available_questions,
             count,
+            session_exclude=set(session_exclude) if session_exclude else None,
         )
     option_orders = {}
     public_questions = []
@@ -97,13 +147,13 @@ def create_quiz(topic_ids, count: int, language: str, difficulty: str, user_id=N
     random.shuffle(public_questions)
     question_ids = [question["id"] for question in public_questions]
 
-    token = secrets.token_urlsafe(32)
+    token = quiz_token
     with get_db_connection() as connection:
         db_execute(connection, """
             INSERT INTO quiz_sessions (
                 token, user_id, language, question_order_json,
-                option_orders_json, topic_ids_json, room_id
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s)
+                option_orders_json, topic_ids_json, room_id, generated_questions_json
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
         """, (
             token,
             user_id,
@@ -112,6 +162,7 @@ def create_quiz(topic_ids, count: int, language: str, difficulty: str, user_id=N
             json.dumps(option_orders),
             json.dumps(normalized_topic_ids),
             room_id,
+            json.dumps({qid: generated_lookup[qid] for qid in question_ids if qid in generated_lookup}),
         ))
         connection.commit()
 
@@ -164,18 +215,27 @@ def _load_quiz_rows(quiz_session):
     question_ids = json.loads(quiz_session["question_order_json"])
     if not question_ids:
         return []
-    placeholders = ", ".join(["%s"] * len(question_ids))
-    with get_db_connection() as connection:
-        rows = db_execute(connection, f"""
-            SELECT q.id, q.topic_id, q.text_en, q.text_ru, q.options_json,
-                   q.explanation_en, q.explanation_ru, q.option_rationales_json, q.difficulty,
-                   q.question_type,
-                   t.title_en AS topic_title_en, t.title_ru AS topic_title_ru
-            FROM questions q
-            JOIN topics t ON t.id = q.topic_id
-            WHERE q.id IN ({placeholders})
-        """, tuple(question_ids)).fetchall()
-    rows_by_id = {row["id"]: row for row in rows}
+
+    generated_by_id = json.loads(quiz_session.get("generated_questions_json") or "{}")
+    static_ids = [qid for qid in question_ids if str(qid) not in generated_by_id]
+
+    rows_by_id = {}
+    if static_ids:
+        placeholders = ", ".join(["%s"] * len(static_ids))
+        with get_db_connection() as connection:
+            rows = db_execute(connection, f"""
+                SELECT q.id, q.topic_id, q.text_en, q.text_ru, q.options_json,
+                       q.explanation_en, q.explanation_ru, q.option_rationales_json, q.difficulty,
+                       q.question_type,
+                       t.title_en AS topic_title_en, t.title_ru AS topic_title_ru
+                FROM questions q
+                JOIN topics t ON t.id = q.topic_id
+                WHERE q.id IN ({placeholders})
+            """, tuple(static_ids)).fetchall()
+        rows_by_id = {row["id"]: row for row in rows}
+    for qid_str, generated in generated_by_id.items():
+        rows_by_id[qid_str] = generated
+
     return [rows_by_id[question_id] for question_id in question_ids if question_id in rows_by_id]
 
 
@@ -351,7 +411,7 @@ def check_quiz_question(token: str, question_id: int, selected, user_id=None):
             )
             connection.commit()
 
-        if user_id:
+        if user_id and isinstance(question_id, int):
             record_question_view(connection, user_id, question_id, assessment["is_correct"])
 
     return assessment
@@ -394,9 +454,11 @@ def submit_quiz(token: str, answers, user_id=None):
             topic_stat["correct"] += 1
 
     with get_db_connection() as connection:
-        # Record question views for logged-in users
+        # Record question views for logged-in users (skip generated instances, no history row)
         if user_id:
             for question in rows:
+                if "is_generated" in question.keys() and question["is_generated"]:
+                    continue
                 assessment = next(r for r in review if r["question_id"] == question["id"])
                 record_question_view(connection, user_id, question["id"], assessment["is_correct"])
 

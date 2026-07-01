@@ -113,6 +113,28 @@ def fetch_questions_for_topics(
         """, tuple(params)).fetchall()
 
 
+def fetch_templates_for_topics(topic_ids: Iterable[int], difficulty: Optional[str] = None):
+    ids = list(dict.fromkeys(int(value) for value in topic_ids))
+    if not ids:
+        return []
+    placeholders = ", ".join(["%s"] * len(ids))
+    conditions = [f"qt.topic_id IN ({placeholders})", "qt.is_active = TRUE"]
+    params = list(ids)
+    if difficulty and difficulty != "all":
+        conditions.append("qt.difficulty = %s")
+        params.append(difficulty)
+    with get_db_connection() as connection:
+        return db_execute(connection, f"""
+            SELECT qt.id, qt.topic_id, qt.template_key, qt.template_en, qt.template_ru,
+                   qt.variables_spec_json, qt.answer_expression, qt.difficulty, qt.question_type,
+                   t.title_en AS topic_title_en, t.title_ru AS topic_title_ru
+            FROM question_templates qt
+            JOIN topics t ON t.id = qt.topic_id
+            WHERE {" AND ".join(conditions)}
+            ORDER BY qt.id
+        """, tuple(params)).fetchall()
+
+
 def fetch_question(question_id: int):
     with get_db_connection() as connection:
         return db_execute(connection, """
@@ -316,7 +338,7 @@ def _translated_option(text: str) -> str:
 
 
 def _teaching_explanation(topic, question, language: str) -> str:
-    correct_en = question["correct"]
+    correct_en = ", ".join(question["correct"]) if isinstance(question["correct"], list) else question["correct"]
     correct_ru = _translated_option(correct_en)
     wrong_en = question["wrong"][:2]
     wrong_ru = [_translated_option(value) for value in wrong_en]
@@ -412,14 +434,17 @@ def synchronize_python_curriculum():
 
             for question_index, question in enumerate(topic["questions"], start=1):
                 question_key = f"{topic_key}:q{question_index}"
-                options_text = [question["correct"], *question["wrong"]]
+                correct_answers = (
+                    question["correct"] if isinstance(question["correct"], list) else [question["correct"]]
+                )
+                options_text = [*correct_answers, *question["wrong"]]
                 options = [
                     {
                         "text_en": text,
                         "text_ru": _translated_option(text),
-                        "is_correct": index == 0,
+                        "is_correct": text in correct_answers,
                     }
-                    for index, text in enumerate(options_text)
+                    for text in options_text
                 ]
                 explanation_en = (
                     question.get("explanation_en")
@@ -485,4 +510,51 @@ def synchronize_python_curriculum():
                                 explanation_en, explanation_ru, option_rationales_json, difficulty, question_type, curriculum_key
                             ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                         """, (*values, question_key))
+        connection.commit()
+
+
+def synchronize_question_templates():
+    from app.curriculum.templates import ALL_TEMPLATES
+
+    with get_db_connection() as connection:
+        for template in ALL_TEMPLATES:
+            topic_key = f"python-core:{template['topic_key']}"
+            topic_row = db_execute(
+                connection,
+                "SELECT id FROM topics WHERE curriculum_key = %s",
+                (topic_key,),
+            ).fetchone()
+            if not topic_row:
+                continue
+            topic_id = topic_row["id"]
+
+            values = (
+                topic_id,
+                template["template_en"],
+                template["template_ru"],
+                json.dumps(template["variables_spec"], ensure_ascii=False),
+                template["answer_expression"],
+                template["difficulty"],
+                template.get("question_type", "mcq"),
+            )
+            existing = db_execute(
+                connection,
+                "SELECT id FROM question_templates WHERE template_key = %s",
+                (template["template_key"],),
+            ).fetchone()
+            if existing:
+                db_execute(connection, """
+                    UPDATE question_templates
+                    SET topic_id = %s, template_en = %s, template_ru = %s,
+                        variables_spec_json = %s, answer_expression = %s,
+                        difficulty = %s, question_type = %s
+                    WHERE id = %s
+                """, (*values, existing["id"]))
+            else:
+                db_execute(connection, """
+                    INSERT INTO question_templates (
+                        topic_id, template_en, template_ru, variables_spec_json,
+                        answer_expression, difficulty, question_type, template_key
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                """, (*values, template["template_key"]))
         connection.commit()

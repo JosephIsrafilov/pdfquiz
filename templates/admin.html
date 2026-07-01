@@ -107,6 +107,14 @@
               </select>
             </div>
             <div>
+              <label class="control-label">Question type</label>
+              <select class="select-input" id="questionTypeSelect" name="question_type">
+                {% for qtype in ['mcq', 'true_false', 'multi_select', 'fill_in_the_blank', 'code_output'] %}
+                <option value="{{ qtype }}" {% if q and q.question_type == qtype %}selected{% endif %}>{{ qtype }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div>
               <label class="control-label">Difficulty</label>
               <select class="select-input" name="difficulty">
                 {% for level in ['beginner', 'intermediate', 'advanced'] %}
@@ -128,18 +136,36 @@
             <div><label class="control-label">Question · English</label><textarea class="text-input editor-textarea" name="text_en">{{ q.text_en or '' }}</textarea></div>
             <div><label class="control-label">Question · Russian</label><textarea class="text-input editor-textarea" name="text_ru">{{ q.text_ru or '' }}</textarea></div>
           </div>
-          <div class="option-editor">
-            <div class="option-editor__head"><strong>Answer options</strong><span>Select one correct row.</span></div>
+
+          <div class="option-editor" data-question-section="mcq multi_select">
+            <div class="option-editor__head"><strong>Answer options</strong><span id="optionEditorHint">Select one correct row.</span></div>
             {% for index in range(6) %}
               {% set option = q.options[index] if q.options and index < q.options|length else {} %}
               <div class="option-editor__row">
-                <input type="radio" name="correct_option" value="{{ index }}" {% if option and option.is_correct %}checked{% endif %} aria-label="Correct option" />
+                <input type="radio" class="option-correct-input" name="correct_option" value="{{ index }}" {% if option and option.is_correct %}checked{% endif %} aria-label="Correct option" />
                 <span class="option-label">{{ 'ABCDEF'[index] }}</span>
                 <input class="text-input" name="option_en_{{ index }}" value="{{ option.text_en or '' }}" placeholder="English option" />
                 <input class="text-input" name="option_ru_{{ index }}" value="{{ option.text_ru or '' }}" placeholder="Russian option" />
               </div>
             {% endfor %}
           </div>
+
+          <div class="option-editor" data-question-section="true_false" style="display: none;">
+            <div class="option-editor__head"><strong>Correct answer</strong></div>
+            <div class="option-editor__row">
+              <label class="option-label-inline"><input type="radio" name="correct_boolean" value="true" {% if q and q.question_type == 'true_false' and q.options and q.options[0].is_correct %}checked{% endif %} /> True / Верно</label>
+              <label class="option-label-inline"><input type="radio" name="correct_boolean" value="false" {% if q and q.question_type == 'true_false' and q.options and q.options|length > 1 and q.options[1].is_correct %}checked{% endif %} /> False / Неверно</label>
+            </div>
+          </div>
+
+          <div class="option-editor" data-question-section="fill_in_the_blank code_output" style="display: none;">
+            <div class="option-editor__head"><strong>Correct answer</strong><span>Student input is matched exactly against this text.</span></div>
+            <div class="bilingual-grid">
+              <div><label class="control-label">Answer · English</label><input class="text-input" name="blank_answer_en" value="{% if q and q.options %}{{ q.options[0].text_en or '' }}{% endif %}" /></div>
+              <div><label class="control-label">Answer · Russian</label><input class="text-input" name="blank_answer_ru" value="{% if q and q.options %}{{ q.options[0].text_ru or '' }}{% endif %}" /></div>
+            </div>
+          </div>
+
           <div class="bilingual-grid">
             <div><label class="control-label">Explanation · English</label><textarea class="text-input" name="explanation_en">{{ q.explanation_en or '' }}</textarea></div>
             <div><label class="control-label">Explanation · Russian</label><textarea class="text-input" name="explanation_ru">{{ q.explanation_ru or '' }}</textarea></div>
@@ -147,6 +173,30 @@
           <button class="button button--primary" type="submit">{% if edit_question %}Save changes{% else %}Add question{% endif %}</button>
         </form>
       </section>
+      <script>
+        (function () {
+          const select = document.getElementById("questionTypeSelect");
+          const sections = document.querySelectorAll("[data-question-section]");
+          const optionInputs = document.querySelectorAll(".option-correct-input");
+          const hint = document.getElementById("optionEditorHint");
+
+          function apply(questionType) {
+            sections.forEach((section) => {
+              const types = section.dataset.questionSection.split(" ");
+              section.style.display = types.includes(questionType) ? "" : "none";
+            });
+            const isMultiSelect = questionType === "multi_select";
+            optionInputs.forEach((input) => {
+              input.type = isMultiSelect ? "checkbox" : "radio";
+              input.name = isMultiSelect ? "correct_options" : "correct_option";
+            });
+            hint.textContent = isMultiSelect ? "Check every correct row." : "Select one correct row.";
+          }
+
+          select.addEventListener("change", () => apply(select.value));
+          apply(select.value);
+        })();
+      </script>
 
       <section class="panel admin-grid">
         <div class="admin-column">

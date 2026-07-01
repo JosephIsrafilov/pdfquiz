@@ -61,8 +61,9 @@ def create_app():
         return jsonify({"error": "Файл слишком большой. Максимум 25 МБ."}), 413
 
     init_db()
-    from app.models.knowledge import synchronize_python_curriculum
+    from app.models.knowledge import synchronize_python_curriculum, synchronize_question_templates
     synchronize_python_curriculum()
+    synchronize_question_templates()
 
     from app.routes.auth import register_auth_routes
     from app.routes.main import register_main_routes

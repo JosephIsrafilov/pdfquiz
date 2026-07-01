@@ -165,6 +165,26 @@ const copy = {
   },
 };
 
+const SEEN_QUESTIONS_KEY = "seenQuestionIds";
+const SEEN_QUESTIONS_LIMIT = 500;
+
+function getSeenQuestionIds() {
+  try {
+    const stored = JSON.parse(localStorage.getItem(SEEN_QUESTIONS_KEY) || "[]");
+    return Array.isArray(stored) ? stored : [];
+  } catch {
+    return [];
+  }
+}
+
+function rememberSeenQuestionIds(ids) {
+  const numericIds = ids.filter((id) => typeof id === "number");
+  if (!numericIds.length) return;
+  const merged = [...new Set([...getSeenQuestionIds(), ...numericIds])];
+  const trimmed = merged.slice(-SEEN_QUESTIONS_LIMIT);
+  localStorage.setItem(SEEN_QUESTIONS_KEY, JSON.stringify(trimmed));
+}
+
 const state = {
   language: localStorage.getItem("quizLanguage") === "ru" ? "ru" : "en",
   courseId: bootstrap.catalog[0]?.id || null,
@@ -785,14 +805,21 @@ async function startQuiz() {
   }
   loadingOverlay.classList.remove("hidden");
   try {
-    const result = await api("/api/quizzes", {
+    const requestBody = {
       topic_ids: [...state.selectedTopics],
       count,
       language: state.language,
       difficulty: difficulty.value,
-    });
+    };
+    if (!bootstrap.currentUser) {
+      requestBody.session_exclude = getSeenQuestionIds();
+    }
+    const result = await api("/api/quizzes", requestBody);
     state.quizToken = result.token;
     state.questions = result.questions;
+    if (!bootstrap.currentUser) {
+      rememberSeenQuestionIds(result.questions.map((q) => q.id));
+    }
     state.answers = {};
     state.checked.clear();
     state.submitted = false;

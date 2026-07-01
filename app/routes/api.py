@@ -35,6 +35,12 @@ def register_api_routes(app):
         topic_ids = payload.get("topic_ids")
         if not isinstance(topic_ids, list) or not topic_ids:
             return jsonify({"error": "Select at least one topic."}), 400
+        raw_exclude = payload.get("session_exclude")
+        session_exclude = (
+            {int(v) for v in raw_exclude if str(v).isdigit()}
+            if isinstance(raw_exclude, list)
+            else None
+        )
         try:
             quiz = create_quiz(
                 topic_ids=topic_ids,
@@ -42,6 +48,7 @@ def register_api_routes(app):
                 language=str(payload.get("language", "en")),
                 difficulty=str(payload.get("difficulty", "all")),
                 user_id=session.get("user_id"),
+                session_exclude=session_exclude,
             )
         except (TypeError, ValueError) as error:
             return jsonify({"error": str(error)}), 400
@@ -71,10 +78,12 @@ def register_api_routes(app):
     )
     def check_topic_quiz_question(token):
         payload = request.get_json(silent=True) or {}
+        raw_question_id = payload.get("question_id")
+        question_id = int(raw_question_id) if isinstance(raw_question_id, (int, str)) and str(raw_question_id).isdigit() else raw_question_id
         try:
             result = check_quiz_question(
                 token=token,
-                question_id=int(payload.get("question_id")),
+                question_id=question_id,
                 selected=payload.get("selected"),
                 user_id=session.get("user_id"),
             )

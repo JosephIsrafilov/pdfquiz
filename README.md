@@ -18,7 +18,10 @@ balanced across the selected topics and graded on the server.
 - Saved attempt history for registered students
 - Teacher panel for courses, topics, questions, users, and imports
 - PDF, DOCX, and JSON import into a selected topic
-- Built-in Python curriculum with 40 topics and 140 bilingual questions
+- Built-in Python curriculum with 38 topics and 144 bilingual questions
+- Multiple question types: multiple choice, true/false, multi-select, fill-in-the-blank, code output
+- Deterministically generated question variants (seeded templates) mixed into quizzes, so numeric/value-based questions differ each time without repeating
+- Anti-memorization weighting for registered students, and a local anti-repeat guard for guests
 - Detailed teaching feedback after every checked answer
 
 The foundation topic order follows the core language path in the

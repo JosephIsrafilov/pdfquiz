@@ -38,13 +38,10 @@ def _redirect_with(message_type, message):
     return redirect(url_for("admin_panel", **{message_type: message}))
 
 
-def _parse_question_form():
-    topic_id = int(request.form.get("topic_id", "0"))
-    text_en = request.form.get("text_en", "").strip()
-    text_ru = request.form.get("text_ru", "").strip()
-    if not text_en and not text_ru:
-        raise ValueError("Provide the question in at least one language.")
+QUESTION_TYPES = {"mcq", "true_false", "multi_select", "fill_in_the_blank", "code_output"}
 
+
+def _parse_mcq_options():
     try:
         correct_index = int(request.form.get("correct_option", "-1"))
     except ValueError as error:
@@ -65,6 +62,68 @@ def _parse_question_form():
         raise ValueError("Provide at least two answer options.")
     if not any(option["is_correct"] for option in options):
         raise ValueError("Select the correct answer from a non-empty option.")
+    return options
+
+
+def _parse_multi_select_options():
+    correct_indices = {
+        int(value) for value in request.form.getlist("correct_options") if value.isdigit()
+    }
+    options = []
+    for index in range(6):
+        option_en = request.form.get(f"option_en_{index}", "").strip()
+        option_ru = request.form.get(f"option_ru_{index}", "").strip()
+        if not option_en and not option_ru:
+            continue
+        options.append({
+            "text_en": option_en,
+            "text_ru": option_ru,
+            "is_correct": index in correct_indices,
+        })
+    if len(options) < 2:
+        raise ValueError("Provide at least two answer options.")
+    if not any(option["is_correct"] for option in options):
+        raise ValueError("Check at least one correct option.")
+    return options
+
+
+def _parse_true_false_options():
+    correct = request.form.get("correct_boolean", "")
+    if correct not in ("true", "false"):
+        raise ValueError("Select True or False as the correct answer.")
+    return [
+        {"text_en": "True", "text_ru": "Верно", "is_correct": correct == "true"},
+        {"text_en": "False", "text_ru": "Неверно", "is_correct": correct == "false"},
+    ]
+
+
+def _parse_blank_options():
+    answer_en = request.form.get("blank_answer_en", "").strip()
+    answer_ru = request.form.get("blank_answer_ru", "").strip()
+    if not answer_en and not answer_ru:
+        raise ValueError("Provide the correct answer in at least one language.")
+    return [{"text_en": answer_en, "text_ru": answer_ru, "is_correct": True}]
+
+
+def _parse_question_form():
+    topic_id = int(request.form.get("topic_id", "0"))
+    text_en = request.form.get("text_en", "").strip()
+    text_ru = request.form.get("text_ru", "").strip()
+    if not text_en and not text_ru:
+        raise ValueError("Provide the question in at least one language.")
+
+    question_type = request.form.get("question_type", "mcq")
+    if question_type not in QUESTION_TYPES:
+        question_type = "mcq"
+
+    if question_type == "multi_select":
+        options = _parse_multi_select_options()
+    elif question_type == "true_false":
+        options = _parse_true_false_options()
+    elif question_type in ("fill_in_the_blank", "code_output"):
+        options = _parse_blank_options()
+    else:
+        options = _parse_mcq_options()
 
     difficulty = request.form.get("difficulty", "beginner")
     if difficulty not in DIFFICULTIES:
@@ -78,6 +137,7 @@ def _parse_question_form():
         "explanation_en": request.form.get("explanation_en", "").strip(),
         "explanation_ru": request.form.get("explanation_ru", "").strip(),
         "difficulty": difficulty,
+        "question_type": question_type,
         "pool": pool,
     }
 

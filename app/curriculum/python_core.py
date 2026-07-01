@@ -114,7 +114,9 @@ OPTION_TRANSLATIONS_RU = {
 }
 
 
-def _q(level, text_en, text_ru, correct, wrong, explanation_en="", explanation_ru="", option_rationales_en=None, option_rationales_ru=None, pool=None):
+def _q(level, text_en, text_ru, correct, wrong, explanation_en="", explanation_ru="", option_rationales_en=None, option_rationales_ru=None, pool=None, question_type="mcq"):
+    """`correct` is normally a single string. For question_type="multi_select"
+    it can be a list of strings — all of them become correct options."""
     result = {
         "difficulty": level,
         "text_en": text_en,
@@ -125,6 +127,7 @@ def _q(level, text_en, text_ru, correct, wrong, explanation_en="", explanation_r
         "explanation_ru": explanation_ru,
         "option_rationales_en": option_rationales_en or {},
         "option_rationales_ru": option_rationales_ru or {},
+        "question_type": question_type,
     }
     if pool:
         result["pool"] = pool
@@ -184,6 +187,10 @@ PYTHON_TOPICS = [
                    "if score > 5 {}": "Неверно. Python использует двоеточие и отступы, а не фигурные скобки.",
                    "if score > 5 do": "Неверно. 'do' не используется для if-блоков в Python."
                }),
+            _q("beginner", "True or false: Python requires semicolons to end every statement.", "Верно или неверно: Python требует точку с запятой в конце каждой инструкции.", "False", ["True"],
+               explanation_en="Python statements end with a newline, not a semicolon. Semicolons are optional and rarely used.",
+               explanation_ru="Инструкции Python завершаются переносом строки, а не точкой с запятой. Точка с запятой необязательна и редко используется.",
+               question_type="true_false"),
         ],
     },
     {
@@ -454,6 +461,10 @@ PYTHON_TOPICS = [
                    "oding": "Неверно. Это был бы срез [1:].",
                    "di": "Неверно. Срез должен включать символ с индексом 1."
                }),
+            _q("beginner", "What is the output of print(len('python'))?", "Что выведет print(len('python'))?", "6", [],
+               explanation_en="len() counts the characters in the string. 'python' has 6 letters.",
+               explanation_ru="len() считает символы в строке. В слове 'python' 6 букв.",
+               question_type="code_output"),
         ],
     },
     {
@@ -508,6 +519,11 @@ PYTHON_TOPICS = [
                    "None": "Неверно. bool() всегда возвращает только True или False.",
                    "An error": "Неверно. bool() может преобразовать любой объект Python."
                }),
+            _q("intermediate", "Which of these values are 'falsy' in Python? (select all that apply)", "Какие из этих значений являются 'ложными' (falsy) в Python? (выберите все подходящие)",
+               ["0", "''", "None"], ["1", "'False'", "[1, 2]"],
+               explanation_en="0, empty string, and None are all falsy. Note the string 'False' is truthy because it's a non-empty string.",
+               explanation_ru="0, пустая строка и None являются ложными (falsy). Строка 'False' истинна, так как это непустая строка.",
+               question_type="multi_select"),
         ],
     },
     {
@@ -616,6 +632,12 @@ PYTHON_TOPICS = [
                    "[0, 1, 2]": "Неверно. Это просто list(range(3)) без умножения.",
                    "[0, 2, 4, 6]": "Неверно. range(3) генерирует 3 элемента, а не 4."
                }),
+            _q("intermediate", "What does this code print?\nvalues = [3, 1, 4]\nvalues.sort()\nprint(values)",
+               "Что выведет этот код?\nvalues = [3, 1, 4]\nvalues.sort()\nprint(values)",
+               "[1, 3, 4]", ["[3, 1, 4]", "[4, 3, 1]", "None"],
+               explanation_en="sort() rearranges the list in place in ascending order.",
+               explanation_ru="sort() перестраивает список на месте в порядке возрастания.",
+               question_type="code_output"),
         ],
     },
     {
