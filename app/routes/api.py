@@ -4,7 +4,7 @@ from zipfile import BadZipFile
 from flask import jsonify, request, session
 
 from app.models.document import fetch_document
-from app.models.quiz import check_quiz_question, create_quiz, submit_quiz
+from app.models.quiz import check_quiz_question, create_quiz, mark_quiz_saved_result, submit_quiz
 from app.models.result import (
     fetch_result_for_user,
     fetch_results_for_user,
@@ -110,27 +110,34 @@ def register_api_routes(app):
         except ValueError as error:
             return jsonify({"error": str(error)}), 400
 
+        already_completed = result.pop("_already_completed", False)
+        saved_result_id = result.pop("_saved_result_id", None)
         saved_result = None
         if session.get("user_id"):
-            mistake_numbers = [
-                index
-                for index, item in enumerate(result["review"], start=1)
-                if not item["is_correct"]
-            ]
-            result_id = save_result(
-                user_id=session["user_id"],
-                document_id=None,
-                source_label=result["source_label"],
-                total_questions=result["total"],
-                quiz_size=result["total"],
-                graded=result["total"],
-                correct=result["correct"],
-                unanswered=result["unanswered"],
-                missing_answer_key=0,
-                mistake_numbers=mistake_numbers,
-                attempt_payload=result["review"],
-                room_id=result.get("room_id"),
-            )
+            if already_completed:
+                result_id = saved_result_id
+            else:
+                mistake_numbers = [
+                    index
+                    for index, item in enumerate(result["review"], start=1)
+                    if not item["is_correct"]
+                ]
+                result_id = save_result(
+                    user_id=session["user_id"],
+                    document_id=None,
+                    source_label=result["source_label"],
+                    total_questions=result["total"],
+                    quiz_size=result["total"],
+                    graded=result["total"],
+                    correct=result["correct"],
+                    unanswered=result["unanswered"],
+                    missing_answer_key=0,
+                    mistake_numbers=mistake_numbers,
+                    attempt_payload=result["review"],
+                    room_id=result.get("room_id"),
+                )
+                if result_id:
+                    mark_quiz_saved_result(token, result_id)
             latest = fetch_result_for_user(result_id, session["user_id"]) if result_id else None
             saved_result = serialize_result(latest) if latest else None
         return jsonify({"result": result, "saved_result": saved_result})
@@ -189,4 +196,3 @@ def register_api_routes(app):
             "document_id": document_id,
             "source_label": source_label,
         })
-

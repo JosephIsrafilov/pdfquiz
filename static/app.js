@@ -194,6 +194,7 @@ const state = {
   answers: {},
   checked: new Set(),
   submitted: false,
+  submitting: false,
   timerInterval: null,
   timerRemaining: null,
 };
@@ -415,6 +416,7 @@ function resetQuiz() {
   state.answers = {};
   state.checked.clear();
   state.submitted = false;
+  state.submitting = false;
   quizArea.innerHTML = "";
   quizHeader.classList.add("hidden");
   quizEmpty.classList.remove("hidden");
@@ -826,6 +828,7 @@ async function startQuiz() {
     state.answers = {};
     state.checked.clear();
     state.submitted = false;
+    state.submitting = false;
     quizTitle.textContent = result.topics.join(" + ");
     summaryBox.classList.add("hidden");
     topicResults.classList.add("hidden");
@@ -857,6 +860,7 @@ async function joinRoom(event) {
     state.answers = {};
     state.checked.clear();
     state.submitted = false;
+    state.submitting = false;
     quizTitle.textContent = result.topics.join(" + ");
     summaryBox.classList.add("hidden");
     topicResults.classList.add("hidden");
@@ -875,7 +879,7 @@ async function joinRoom(event) {
 }
 
 async function submitQuiz() {
-  if (!state.quizToken || state.submitted) return;
+  if (!state.quizToken || state.submitted || state.submitting) return;
 
   const unanswered = state.questions.filter((q) => {
     const ans = state.answers[q.id];
@@ -890,14 +894,17 @@ async function submitQuiz() {
     if (!confirm(confirmMessage)) return;
   }
 
+  state.submitting = true;
   submitButton.disabled = true;
   clearQuizTimer();
   try {
     const payload = await api(`/api/quizzes/${state.quizToken}/submit`, { answers: state.answers });
     state.submitted = true;
+    state.submitting = false;
     renderResult(payload.result, payload.saved_result);
     summaryBox.scrollIntoView({ behavior: "smooth", block: "center" });
   } catch (error) {
+    state.submitting = false;
     setBuilderError(error.message);
     submitButton.disabled = false;
   }

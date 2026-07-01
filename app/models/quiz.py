@@ -426,6 +426,12 @@ def submit_quiz(token: str, answers, user_id=None):
     if not quiz_session:
         raise ValueError("Quiz session was not found.")
     if quiz_session["completed"]:
+        stored_result = quiz_session.get("result_json")
+        if stored_result:
+            result = json.loads(stored_result)
+            result["_already_completed"] = True
+            result["_saved_result_id"] = quiz_session.get("saved_result_id")
+            return result
         raise ValueError("This quiz has already been submitted.")
     if quiz_session["user_id"] is not None and quiz_session["user_id"] != user_id:
         raise PermissionError("This quiz belongs to another user.")
@@ -457,24 +463,8 @@ def submit_quiz(token: str, answers, user_id=None):
         if assessment["is_correct"]:
             topic_stat["correct"] += 1
 
-    with get_db_connection() as connection:
-        # Record question views for logged-in users (skip generated instances, no history row)
-        if user_id:
-            for question in rows:
-                if "is_generated" in question.keys() and question["is_generated"]:
-                    continue
-                assessment = next(r for r in review if r["question_id"] == question["id"])
-                record_question_view(connection, user_id, question["id"], assessment["is_correct"])
-
-        db_execute(
-            connection,
-            "UPDATE quiz_sessions SET completed = TRUE WHERE token = %s",
-            (token,),
-        )
-        connection.commit()
-
     topic_names = list(topic_stats)
-    return {
+    result = {
         "language": quiz_session["language"],
         "total": len(review),
         "correct": correct,
@@ -486,6 +476,44 @@ def submit_quiz(token: str, answers, user_id=None):
         "answers": normalized_answers,
         "room_id": quiz_session["room_id"],
     }
+
+    with get_db_connection() as connection:
+        # Record question views for logged-in users (skip generated instances, no history row)
+        if user_id:
+            for question in rows:
+                if "is_generated" in question.keys() and question["is_generated"]:
+                    continue
+                assessment = next(r for r in review if r["question_id"] == question["id"])
+                record_question_view(connection, user_id, question["id"], assessment["is_correct"])
+
+        db_execute(
+            connection,
+            """
+                UPDATE quiz_sessions
+                SET completed = TRUE,
+                    submitted_answers_json = %s,
+                    result_json = %s
+                WHERE token = %s
+            """,
+            (
+                json.dumps(normalized_answers),
+                json.dumps(result),
+                token,
+            ),
+        )
+        connection.commit()
+
+    return result
+
+
+def mark_quiz_saved_result(token: str, result_id: int):
+    with get_db_connection() as connection:
+        db_execute(
+            connection,
+            "UPDATE quiz_sessions SET saved_result_id = %s WHERE token = %s",
+            (result_id, token),
+        )
+        connection.commit()
 
 
 def cleanup_old_quiz_sessions(hours: int = 24):

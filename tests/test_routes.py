@@ -147,6 +147,49 @@ def test_topic_quiz_hides_answers_and_grades_on_server(client):
     assert all(item["explanation"] for item in result["review"])
 
 
+def test_topic_quiz_duplicate_submit_returns_stored_result(client):
+    from app.database import db_execute, get_db_connection
+    from app.models.knowledge import fetch_catalog
+
+    client.post(
+        "/register",
+        data={
+            "username": "duplicate_submit_user",
+            "password": "password123",
+            "password_repeat": "password123",
+        },
+        follow_redirects=True,
+    )
+    with client.session_transaction() as sess:
+        user_id = sess["user_id"]
+
+    topic_id = fetch_catalog()[0]["topics"][0]["id"]
+    quiz_resp = client.post(
+        "/api/quizzes",
+        json={"topic_ids": [topic_id], "count": 2, "language": "en", "difficulty": "all"},
+    )
+    assert quiz_resp.status_code == 201
+    quiz = quiz_resp.get_json()
+
+    first = client.post(f"/api/quizzes/{quiz['token']}/submit", json={"answers": {}})
+    second_answers = {str(question["id"]): 0 for question in quiz["questions"]}
+    second = client.post(
+        f"/api/quizzes/{quiz['token']}/submit",
+        json={"answers": second_answers},
+    )
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert second.get_json()["result"]["unanswered"] == first.get_json()["result"]["unanswered"]
+    with get_db_connection() as connection:
+        result_count = db_execute(
+            connection,
+            "SELECT COUNT(*) FROM results WHERE user_id = %s",
+            (user_id,),
+        ).fetchone()[0]
+    assert result_count == 1
+
+
 def test_topic_quiz_submits_multi_select_question(client):
     from app.models.knowledge import create_course, create_question, create_topic
     from app.models.quiz import fetch_quiz_session
