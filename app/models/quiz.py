@@ -217,6 +217,10 @@ def _load_quiz_rows(quiz_session):
         return []
 
     generated_by_id = json.loads(quiz_session.get("generated_questions_json") or "{}")
+    if not isinstance(generated_by_id, dict):
+        # Legacy rows backfilled by the migration's DEFAULT '[]' before this
+        # column was populated explicitly.
+        generated_by_id = {}
     static_ids = [qid for qid in question_ids if str(qid) not in generated_by_id]
 
     rows_by_id = {}

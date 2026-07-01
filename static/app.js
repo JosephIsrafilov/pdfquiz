@@ -337,19 +337,23 @@ function renderCatalog() {
       if (!groups.has(stage)) groups.set(stage, []);
       groups.get(stage).push(topic);
     });
-    let stageIndex = 0;
+    if (!state.openStages) {
+      // Open the first stage by default
+      state.openStages = new Set([groups.keys().next().value]);
+    }
     groups.forEach((topics, stage) => {
       const section = document.createElement("section");
       section.className = "topic-stage";
-      // Open the first stage by default
-      if (stageIndex === 0) {
+      if (state.openStages.has(stage)) {
         section.classList.add("is-open");
       }
-      
+
       const heading = document.createElement("h3");
       heading.textContent = t(stage);
       heading.addEventListener("click", () => {
-        section.classList.toggle("is-open");
+        const isOpen = section.classList.toggle("is-open");
+        if (isOpen) state.openStages.add(stage);
+        else state.openStages.delete(stage);
       });
       
       const grid = document.createElement("div");
