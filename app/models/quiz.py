@@ -15,6 +15,20 @@ ALLOWED_DIFFICULTIES = {"all", "beginner", "intermediate", "advanced"}
 MAX_QUIZ_SIZE = 100
 
 
+def _is_missing_submit_storage_column(error: Exception) -> bool:
+    message = str(error).lower()
+    error_name = type(error).__name__.lower()
+    return (
+        "submitted_answers_json" in message
+        or "result_json" in message
+        or "saved_result_id" in message
+    ) and (
+        "no column" in message
+        or "does not exist" in message
+        or "undefinedcolumn" in error_name
+    )
+
+
 def _localized(row, field: str, language: str) -> str:
     primary = row[f"{field}_{language}"]
     fallback = row[f"{field}_{'ru' if language == 'en' else 'en'}"]
@@ -486,21 +500,31 @@ def submit_quiz(token: str, answers, user_id=None):
                 assessment = next(r for r in review if r["question_id"] == question["id"])
                 record_question_view(connection, user_id, question["id"], assessment["is_correct"])
 
-        db_execute(
-            connection,
-            """
-                UPDATE quiz_sessions
-                SET completed = TRUE,
-                    submitted_answers_json = %s,
-                    result_json = %s
-                WHERE token = %s
-            """,
-            (
-                json.dumps(normalized_answers),
-                json.dumps(result),
-                token,
-            ),
-        )
+        try:
+            db_execute(
+                connection,
+                """
+                    UPDATE quiz_sessions
+                    SET completed = TRUE,
+                        submitted_answers_json = %s,
+                        result_json = %s
+                    WHERE token = %s
+                """,
+                (
+                    json.dumps(normalized_answers),
+                    json.dumps(result),
+                    token,
+                ),
+            )
+        except Exception as error:
+            connection.rollback()
+            if not _is_missing_submit_storage_column(error):
+                raise
+            db_execute(
+                connection,
+                "UPDATE quiz_sessions SET completed = TRUE WHERE token = %s",
+                (token,),
+            )
         connection.commit()
 
     return result
@@ -508,11 +532,17 @@ def submit_quiz(token: str, answers, user_id=None):
 
 def mark_quiz_saved_result(token: str, result_id: int):
     with get_db_connection() as connection:
-        db_execute(
-            connection,
-            "UPDATE quiz_sessions SET saved_result_id = %s WHERE token = %s",
-            (result_id, token),
-        )
+        try:
+            db_execute(
+                connection,
+                "UPDATE quiz_sessions SET saved_result_id = %s WHERE token = %s",
+                (result_id, token),
+            )
+        except Exception as error:
+            connection.rollback()
+            if not _is_missing_submit_storage_column(error):
+                raise
+            return
         connection.commit()
 
 

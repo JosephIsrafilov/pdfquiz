@@ -190,6 +190,70 @@ def test_topic_quiz_duplicate_submit_returns_stored_result(client):
     assert result_count == 1
 
 
+def test_topic_quiz_submit_works_when_result_storage_columns_are_missing(client, monkeypatch):
+    from app.database import db_execute as real_db_execute
+    from app.models.knowledge import fetch_catalog
+    import app.models.quiz as quiz_model
+
+    def db_execute_without_result_storage(connection, query, params=()):
+        if "result_json" in query:
+            raise RuntimeError("no column: result_json")
+        return real_db_execute(connection, query, params)
+
+    topic_id = fetch_catalog()[0]["topics"][0]["id"]
+    quiz_resp = client.post(
+        "/api/quizzes",
+        json={"topic_ids": [topic_id], "count": 2, "language": "en", "difficulty": "all"},
+    )
+    assert quiz_resp.status_code == 201
+
+    monkeypatch.setattr(quiz_model, "db_execute", db_execute_without_result_storage)
+    submit_resp = client.post(
+        f"/api/quizzes/{quiz_resp.get_json()['token']}/submit",
+        json={"answers": {}},
+    )
+
+    assert submit_resp.status_code == 200
+    assert submit_resp.get_json()["result"]["total"] == 2
+
+
+def test_topic_quiz_submit_works_when_saved_result_column_is_missing(client, monkeypatch):
+    from app.database import db_execute as real_db_execute
+    from app.models.knowledge import fetch_catalog
+    import app.models.quiz as quiz_model
+
+    client.post(
+        "/register",
+        data={
+            "username": "missing_saved_result_column_user",
+            "password": "password123",
+            "password_repeat": "password123",
+        },
+        follow_redirects=True,
+    )
+
+    def db_execute_without_saved_result_id(connection, query, params=()):
+        if "saved_result_id" in query:
+            raise RuntimeError("no column: saved_result_id")
+        return real_db_execute(connection, query, params)
+
+    topic_id = fetch_catalog()[0]["topics"][0]["id"]
+    quiz_resp = client.post(
+        "/api/quizzes",
+        json={"topic_ids": [topic_id], "count": 2, "language": "en", "difficulty": "all"},
+    )
+    assert quiz_resp.status_code == 201
+
+    monkeypatch.setattr(quiz_model, "db_execute", db_execute_without_saved_result_id)
+    submit_resp = client.post(
+        f"/api/quizzes/{quiz_resp.get_json()['token']}/submit",
+        json={"answers": {}},
+    )
+
+    assert submit_resp.status_code == 200
+    assert submit_resp.get_json()["saved_result"] is not None
+
+
 def test_topic_quiz_submits_multi_select_question(client):
     from app.models.knowledge import create_course, create_question, create_topic
     from app.models.quiz import fetch_quiz_session
