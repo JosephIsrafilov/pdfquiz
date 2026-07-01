@@ -379,7 +379,6 @@ function renderCatalog() {
       });
       section.append(heading, grid);
       topicList.appendChild(section);
-      stageIndex++;
     });
   }
 
